@@ -5,19 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Convivencia Escolar Pro</title>
     
-    <!-- 1. Estilos -->
+    <!-- Error Handler Visual -->
+    <script>
+        window.onerror = function(msg, url, line, col, error) {
+            var root = document.getElementById('root');
+            if (root) {
+                root.innerHTML = `
+                    <div style="display:flex; height:100vh; justify-content:center; align-items:center; flex-direction:column; background:#fef2f2; color:#991b1b; padding:20px; text-align:center;">
+                        <h2 style="font-size:1.5rem; font-weight:bold; margin-bottom:10px;">Ocurrió un problema técnico</h2>
+                        <p style="background:white; padding:15px; border-radius:8px; border:1px solid #f87171; font-family:monospace;">${msg}</p>
+                        <p style="margin-top:15px; font-size:0.9rem;">Por favor, actualiza la página. Si persiste, verifica tu conexión a internet.</p>
+                    </div>
+                `;
+            }
+            return false;
+        };
+    </script>
+
+    <!-- Estilos y Fuentes -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-        .fade-in { animation: fadeIn 0.4s ease-out; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f0f4f8; }
+        .fade-in { animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 100; padding: 1rem; }
-        .spinner { width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top: 4px solid #4f46e5; border-radius: 50%; animation: spin 1s linear infinite; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 100; padding: 1rem; }
+        .spinner { width: 40px; height: 40px; border: 3px solid #e2e8f0; border-top: 3px solid #6366f1; border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Estilos personalizados */
+        .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.5); }
+        .gradient-sidebar { background: linear-gradient(180deg, #1e1b4b 0%, #312e81 100%); }
+        .gradient-header { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); transition: all 0.2s ease; }
     </style>
 
-    <!-- 2. Librerías React y Utilidades -->
+    <!-- 2. Librerías -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -26,21 +49,21 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
-    <!-- 3. Firebase Compat (Versión Estable y Robusta) -->
+    <!-- 3. Firebase Compat -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
     <div id="root">
-        <div style="height:100vh; display:flex; justify-content:center; align-items:center; flex-direction:column;">
+        <div style="height:100vh; display:flex; justify-content:center; align-items:center; flex-direction:column; background: #f8fafc;">
             <div class="spinner"></div>
-            <p style="margin-top:10px; color:#64748b;">Iniciando Aplicación...</p>
+            <p style="margin-top:15px; color:#64748b; font-weight:500;">Cargando Sistema...</p>
         </div>
     </div>
 
     <script type="text/babel">
-        // --- CONFIGURACIÓN E INICIALIZACIÓN ---
+        // --- INICIALIZACIÓN ---
         const firebaseConfig = {
             apiKey: "AIzaSyCoWGztkjAUapy4BuMHRjgmUvLEyO5JI4U",
             authDomain: "gestor-convivencia-escolar.firebaseapp.com",
@@ -50,206 +73,232 @@
             appId: "1:864079766812:web:abdf1eb0da71b1a3aec6d9"
         };
 
-        // Inicializar Firebase solo si no existe
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const auth = firebase.auth();
 
-        // --- COMPONENTES ---
         const { useState, useEffect, useMemo } = React;
 
-        // Icon Helper
+        // --- UTILS ---
         const Icon = ({ name, size = 18, className = "", onClick }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
             return <i data-lucide={name} width={size} height={size} className={className} onClick={onClick}></i>;
         };
 
-        // PDF Helper
-        const generatePDF = (title, data, type, extraInfo = "", managerName = "Encargado de Convivencia") => {
-            if(!window.jspdf) return alert("PDF lib no cargada");
+        const generateTextAnalysis = (data, context, studentName = "") => {
+            if (!data || data.length === 0) return "Sin datos suficientes para análisis.";
+            const total = data.length;
+            const highRisk = data.filter(d => d.risk === 'Alto').length;
+            const highRiskPct = total > 0 ? Math.round((highRisk / total) * 100) : 0;
+            const counts = (key) => data.reduce((acc, curr) => { acc[curr[key]] = (acc[curr[key]] || 0) + 1; return acc; }, {});
+            const types = Object.entries(counts('type')).sort((a,b) => b[1]-a[1]);
+            const mainType = types[0] ? types[0][0] : "N/A";
+            
+            if (context === 'student') {
+                return `INFORME ESTUDIANTE: ${studentName}\nHistorial de ${total} atenciones. ${highRiskPct}% Riesgo Alto. Foco: ${mainType}. Se sugiere seguimiento.`;
+            } 
+            return `INFORME CURSO\nTotal eventos: ${total}. Riesgo Alto: ${highRiskPct}%. Principal: ${mainType}.`;
+        };
+
+        const generatePDF = (title, data, type, extraInfo = "", managerName = "Encargado") => {
+            if(!window.jspdf) return alert("Cargando PDF...");
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             
-            doc.setFillColor(67, 56, 202); doc.rect(0, 0, 210, 35, 'F');
-            doc.setTextColor(255, 255, 255); doc.setFontSize(18); doc.text(title.toUpperCase(), 14, 22);
-            doc.setFontSize(10); doc.text(new Date().toLocaleDateString(), 180, 22);
-            doc.setTextColor(40, 40, 40);
+            doc.setFillColor(99, 102, 241); doc.rect(0, 0, 210, 40, 'F');
+            doc.setTextColor(255); doc.setFontSize(20); doc.text(title.toUpperCase(), 15, 25);
+            doc.setFontSize(10); doc.text(new Date().toLocaleDateString(), 180, 25);
+            doc.setTextColor(50);
 
-            let cursorY = 50;
+            let cursorY = 55;
 
             if (type === 'single') {
                 const c = data;
-                doc.setFontSize(12); doc.setFont(undefined, 'bold'); doc.text("FICHA DE CASO", 14, 50);
-                doc.setFontSize(10); doc.setFont(undefined, 'normal'); cursorY = 60;
+                doc.setFont(undefined, 'bold'); doc.text("FICHA DE CASO", 15, cursorY); cursorY += 10;
+                doc.setFont(undefined, 'normal');
                 
                 const details = [
                     [`Estudiante: ${c.studentName}`, `Curso: ${c.course}`],
                     [`Fecha: ${new Date(c.date).toLocaleDateString()}`, `Riesgo: ${c.risk}`],
-                    [`Tipo: ${c.type}`, `Profesional: ${c.professional}`]
+                    [`Tipo: ${c.type}`, `Estado: ${c.status || 'Abierto'}`]
                 ];
-                details.forEach(row => { doc.text(row[0], 14, cursorY); doc.text(row[1], 110, cursorY); cursorY += 8; });
+                details.forEach(row => { doc.text(row[0], 15, cursorY); doc.text(row[1], 110, cursorY); cursorY += 8; });
                 
-                cursorY += 5; doc.line(14, cursorY, 196, cursorY); cursorY += 10;
-                doc.setFont(undefined, 'bold'); doc.text("Descripción:", 14, cursorY); cursorY += 6;
-                doc.setFont(undefined, 'normal'); doc.text(doc.splitTextToSize(c.description || "Sin descripción", 180), 14, cursorY);
+                cursorY += 5; doc.setDrawColor(200); doc.line(15, cursorY, 195, cursorY); cursorY += 10;
                 
+                doc.setFont(undefined, 'bold'); doc.text("Descripción:", 15, cursorY); cursorY += 6;
+                doc.setFont(undefined, 'normal'); doc.text(doc.splitTextToSize(c.description || "Sin descripción", 180), 15, cursorY);
+                cursorY += 20;
+
                 if (c.interventions && c.interventions.length > 0) {
-                    cursorY += 40; 
-                    doc.setFont(undefined, 'bold'); doc.text("Bitácora de Intervenciones:", 14, cursorY); cursorY += 8;
+                    doc.setFont(undefined, 'bold'); doc.text("Bitácora:", 15, cursorY); cursorY += 8;
                     c.interventions.forEach(int => {
                         doc.setFontSize(9);
-                        doc.text(`${new Date(int.date).toLocaleDateString()} - ${int.professional}`, 14, cursorY);
+                        doc.text(`${new Date(int.date).toLocaleDateString()} - ${int.professional}`, 15, cursorY);
                         cursorY += 5;
-                        doc.text(doc.splitTextToSize(int.content || "", 180), 14, cursorY);
+                        doc.text(doc.splitTextToSize(int.content || "", 180), 15, cursorY);
                         cursorY += 15;
                     });
                 }
-                
-                const pageHeight = doc.internal.pageSize.height;
-                doc.line(70, pageHeight - 40, 140, pageHeight - 40);
-                doc.text(c.professional || "Profesional", 105, pageHeight - 35, null, null, "center");
-
             } else {
-                const analysisText = generateTextAnalysis(data, type, extraInfo);
-                const splitText = doc.splitTextToSize(analysisText, 180);
-                doc.text(splitText, 14, cursorY);
-                cursorY += (splitText.length * 5) + 10;
-
-                let headers, rows;
-                if (type === 'student') {
-                    headers = [["Fecha", "Falta", "Riesgo", "Profesional", "Estado"]];
-                    rows = data.map(d => [d.date, d.type, d.risk, d.professional, d.status || 'Abierto']);
-                } else {
-                    headers = [["Fecha", "Estudiante", "Curso", "Tipo", "Riesgo", "Profesional"]];
-                    rows = data.map(d => [d.date, d.studentName, d.course, d.type, d.risk, d.professional]);
-                }
-                doc.autoTable({ head: headers, body: rows, startY: cursorY, theme: 'grid' });
-                
-                const finalY = doc.lastAutoTable.finalY + 40;
-                doc.line(70, finalY, 140, finalY);
-                doc.text(managerName, 105, finalY + 5, null, null, "center");
+                doc.text(doc.splitTextToSize(generateTextAnalysis(data, type, extraInfo), 180), 15, cursorY);
+                cursorY += 30;
+                let headers = [["Fecha", "Estudiante", "Tipo", "Riesgo", "Estado"]];
+                let rows = data.map(d => [d.date, d.studentName, d.type, d.risk, d.status||'']);
+                doc.autoTable({ head: headers, body: rows, startY: cursorY, theme: 'grid', headStyles: {fillColor:[99,102,241]} });
             }
             doc.save(`${title}.pdf`);
         };
 
-        // --- Logic de Análisis de Texto para PDF ---
-        const generateTextAnalysis = (data, context, studentName = "") => {
-            if (!data || data.length === 0) return "Sin datos suficientes.";
-            const total = data.length;
-            const highRisk = data.filter(d => d.risk === 'Alto').length;
-            const highRiskPct = total > 0 ? Math.round((highRisk / total) * 100) : 0;
-            
-            const counts = (key) => data.reduce((acc, curr) => { acc[curr[key]] = (acc[curr[key]] || 0) + 1; return acc; }, {});
-            const types = Object.entries(counts('type')).sort((a,b) => b[1]-a[1]);
-            const mainType = types[0] ? types[0][0] : "varios";
-            
-            let text = "";
-            if (context === 'student') {
-                text = `INFORME ESTUDIANTE: ${studentName}\n\n`;
-                text += `A la fecha actual, el estudiante registra un historial de ${total} atenciones. `;
-                text += `Del total de casos, un ${highRiskPct}% corresponde a situaciones de Riesgo Alto. `;
-                text += `La conducta más recurrente observada es "${mainType}". `;
-                text += `Se recomienda mantener el monitoreo y seguimiento de los acuerdos establecidos en cada intervención.`;
-            } else {
-                text = `INFORME DE GESTIÓN DE CURSO\n\n`;
-                text += `El curso presenta un total de ${total} eventos registrados. `;
-                text += `El nivel de riesgo alto alcanza un ${highRiskPct}%. `;
-                text += `La principal problemática detectada es "${mainType}", lo que sugiere la necesidad de intervenciones grupales focalizadas en esta temática.`;
-            }
-            return text;
-        };
-
-        // Configuración por Defecto
         const defaultConfig = {
-            managerName: "Encargado de Convivencia", 
-            professionals: ["Psicólogo", "Orientador", "Inspector General", "Profesor Jefe"],
-            caseTypes: ["Agresión Física", "Agresión Verbal", "Ciberacoso", "Disrupción", "Asistencia", "Vulneración Derechos", "Académico"],
-            actions: ["Entrevista Apoderado", "Mediación", "Derivación", "Suspensión", "Carta Compromiso", "Contención", "Entrevista Alumno"],
+            managerName: "Encargado Convivencia", 
+            professionals: ["Psicólogo", "Orientador", "Inspector", "Profesor Jefe"],
+            caseTypes: ["Agresión Física", "Agresión Verbal", "Ciberacoso", "Disrupción", "Asistencia", "Vulneración", "Académico"],
+            actions: ["Entrevista Apoderado", "Mediación", "Derivación", "Suspensión", "Carta Compromiso", "Contención"],
             courses: ["1° Básico", "2° Básico", "3° Básico", "4° Básico", "5° Básico", "6° Básico", "7° Básico", "8° Básico", "1° Medio", "2° Medio", "3° Medio", "4° Medio"],
-            strategies: ["Diálogo formativo", "Cambio de puesto", "Citación Apoderado", "Refuerzo positivo", "Derivación a especialista"]
+            strategies: ["Diálogo formativo", "Cambio de puesto", "Citación Apoderado", "Refuerzo positivo"]
         };
 
-        // --- COMPONENTES DE LA INTERFAZ ---
+        // --- COMPONENTES ---
 
-        const Login = ({ onLogin }) => {
+        const Modal = ({ children, onClose }) => (
+            <div className="modal-overlay" onClick={onClose}>
+                <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 relative animate-fade-in" onClick={e=>e.stopPropagation()}>
+                    <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><Icon name="x"/></button>
+                    {children}
+                </div>
+            </div>
+        );
+
+        const LoginScreen = ({ onAuth, error, loading }) => {
             const [isReg, setIsReg] = useState(false);
-            const [email, setEmail] = useState('');
-            const [pass, setPass] = useState('');
-            const [error, setError] = useState('');
-
-            const handleSubmit = async () => {
-                setError('');
-                try {
-                    if (isReg) await auth.createUserWithEmailAndPassword(email, pass);
-                    else await auth.signInWithEmailAndPassword(email, pass);
-                } catch (e) {
-                    setError(e.message);
-                }
-            };
-
+            const [creds, setCreds] = useState({e:'', p:''});
             return (
-                <div className="min-h-screen flex items-center justify-center gradient-bg">
-                    <div className="bg-white p-8 rounded-2xl shadow-xl w-80">
-                        <h2 className="text-xl font-bold text-center mb-4 text-slate-800">Convivencia Pro</h2>
-                        <input className="w-full mb-3 p-2 border rounded" type="email" placeholder="Correo" value={email} onChange={e=>setEmail(e.target.value)} />
-                        <input className="w-full mb-4 p-2 border rounded" type="password" placeholder="Contraseña" value={pass} onChange={e=>setPass(e.target.value)} />
-                        {error && <p className="text-red-500 text-xs mb-3">{error}</p>}
-                        <button onClick={handleSubmit} className="w-full bg-indigo-600 text-white py-2 rounded font-bold">{isReg ? 'Registrar' : 'Entrar'}</button>
-                        <button onClick={()=>setIsReg(!isReg)} className="w-full text-xs text-indigo-600 mt-3 text-center block">{isReg ? 'Volver a Login' : 'Crear Cuenta'}</button>
+                <div className="min-h-screen flex items-center justify-center bg-slate-50 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 z-0"></div>
+                    <div className="bg-white/80 backdrop-blur-xl p-8 rounded-3xl shadow-2xl w-full max-w-sm relative z-10 border border-white">
+                        {loading && <div className="absolute inset-0 bg-white/50 flex items-center justify-center z-20 rounded-3xl"><div className="spinner"></div></div>}
+                        <div className="text-center mb-8">
+                            <div className="w-16 h-16 bg-gradient-to-tr from-indigo-600 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-lg transform -rotate-3">
+                                <Icon name="shield-check" size={32}/>
+                            </div>
+                            <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Convivencia Pro</h2>
+                            <p className="text-sm text-slate-500 mt-1">Gestión Escolar Inteligente</p>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Correo</label>
+                                <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" type="email" placeholder="usuario@colegio.cl" value={creds.e} onChange={e=>setCreds({...creds, e:e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Contraseña</label>
+                                <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" type="password" placeholder="••••••••" value={creds.p} onChange={e=>setCreds({...creds, p:e.target.value})} />
+                            </div>
+                        </div>
+                        {error && <div className="bg-red-50 text-red-600 text-xs p-3 rounded-lg mt-4 text-center border border-red-100 flex items-center justify-center gap-2"><Icon name="alert-circle" size={14}/> {error}</div>}
+                        <button onClick={()=>onAuth(creds.e, creds.p, isReg)} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-bold mt-6 shadow-lg shadow-indigo-200 transition-all transform hover:-translate-y-0.5">
+                            {isReg ? 'Registrar Cuenta' : 'Iniciar Sesión'}
+                        </button>
+                        <button onClick={()=>setIsReg(!isReg)} className="w-full text-xs text-slate-500 mt-4 hover:text-indigo-600 font-medium">
+                            {isReg ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
+                        </button>
                     </div>
                 </div>
             );
         };
 
-        const Dashboard = ({ cases, config, onEdit, onDelete, onPrint }) => {
+        const Dashboard = ({ cases, onEdit, onDelete, onPrint }) => {
             const [filterDate, setFilterDate] = useState("");
-            
-            const filtered = useMemo(() => {
-                return filterDate ? cases.filter(c => new Date(c.date) >= new Date(filterDate)) : cases;
-            }, [cases, filterDate]);
-
+            const filtered = useMemo(() => filterDate ? cases.filter(c => new Date(c.date) >= new Date(filterDate)) : cases, [cases, filterDate]);
             const stats = useMemo(() => ({
                 total: filtered.length,
-                highRisk: filtered.filter(c => c.risk === 'Alto').length,
-                byType: filtered.reduce((acc,c)=>{acc[c.type]=(acc[c.type]||0)+1; return acc},{})
+                high: filtered.filter(c => c.risk === 'Alto').length,
+                types: filtered.reduce((acc,c)=>{acc[c.type]=(acc[c.type]||0)+1; return acc},{})
             }), [filtered]);
 
             useEffect(() => {
-                if(window.myChart) window.myChart.destroy();
-                const ctx = document.getElementById('chart-types');
-                if(ctx) {
-                    window.myChart = new Chart(ctx, { 
-                        type: 'bar', 
-                        data: { labels: Object.keys(stats.byType), datasets: [{ label: 'Casos', data: Object.values(stats.byType), backgroundColor: '#6366f1' }] },
-                        options: { responsive: true, maintainAspectRatio: false }
+                const ctx = document.getElementById('chart');
+                if(ctx && window.Chart) {
+                    if(window.myChart) window.myChart.destroy();
+                    window.myChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: { labels: Object.keys(stats.types), datasets: [{ label: 'Casos', data: Object.values(stats.types), backgroundColor: '#818cf8', borderRadius: 6 }] },
+                        options: { responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, grid:{display:false}}, x:{grid:{display:false}}} }
                     });
                 }
             }, [stats]);
 
             return (
-                <div className="fade-in">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
-                        <input type="date" className="border p-2 rounded" onChange={e=>setFilterDate(e.target.value)} />
+                <div className="fade-in space-y-6">
+                    <header className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                        <div>
+                            <h2 className="text-2xl font-bold text-slate-800">Panel General</h2>
+                            <p className="text-slate-500 text-sm">Resumen de indicadores clave</p>
+                        </div>
+                        <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                            <Icon name="calendar" size={16} className="text-slate-400"/>
+                            <span className="text-xs font-bold text-slate-500 uppercase mr-2">Desde:</span>
+                            <input type="date" className="bg-transparent text-sm outline-none text-slate-700" onChange={e=>setFilterDate(e.target.value)} />
+                        </div>
+                    </header>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 card-hover">
+                            <div className="p-4 bg-indigo-50 text-indigo-600 rounded-xl"><Icon name="folder-open" size={28}/></div>
+                            <div><p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Total Casos</p><h3 className="text-3xl font-bold text-slate-800">{stats.total}</h3></div>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 card-hover">
+                            <div className="p-4 bg-rose-50 text-rose-600 rounded-xl"><Icon name="alert-triangle" size={28}/></div>
+                            <div><p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Riesgo Alto</p><h3 className="text-3xl font-bold text-slate-800">{stats.high}</h3></div>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 card-hover">
+                            <div className="p-4 bg-emerald-50 text-emerald-600 rounded-xl"><Icon name="check-circle" size={28}/></div>
+                            <div><p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Cerrados</p><h3 className="text-3xl font-bold text-slate-800">{filtered.filter(c=>c.status==='Cerrado').length}</h3></div>
+                        </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-4 mb-6">
-                        <div className="bg-white p-4 rounded shadow">Total: <span className="font-bold">{stats.total}</span></div>
-                        <div className="bg-white p-4 rounded shadow">Alto Riesgo: <span className="font-bold text-red-500">{stats.highRisk}</span></div>
+
+                    <div className="grid md:grid-cols-3 gap-6">
+                        <div className="md:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                            <h3 className="font-bold text-slate-700 mb-6">Distribución de Faltas</h3>
+                            <div className="h-64"><canvas id="chart"></canvas></div>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 overflow-y-auto h-80">
+                            <h3 className="font-bold text-slate-700 mb-4">Actividad Reciente</h3>
+                            <div className="space-y-4">
+                                {filtered.slice(0,5).map(c => (
+                                    <div key={c.id} className="flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-100 cursor-pointer" onClick={()=>onEdit(c)}>
+                                        <div className={`w-2 h-2 rounded-full ${c.risk==='Alto'?'bg-rose-500':'bg-emerald-500'}`}></div>
+                                        <div className="flex-1">
+                                            <p className="text-sm font-bold text-slate-800">{c.studentName}</p>
+                                            <p className="text-xs text-slate-500">{new Date(c.date).toLocaleDateString()} • {c.type}</p>
+                                        </div>
+                                        <Icon name="chevron-right" size={16} className="text-slate-300"/>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
-                    <div className="bg-white p-4 rounded shadow mb-6 h-64"><canvas id="chart-types"></canvas></div>
-                    <div className="bg-white rounded shadow overflow-hidden">
+
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                            <h3 className="font-bold text-slate-800">Registro Detallado</h3>
+                        </div>
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-50 text-slate-500"><tr><th className="p-3">Fecha</th><th className="p-3">Estudiante</th><th className="p-3">Tipo</th><th className="p-3">Riesgo</th><th className="p-3"></th></tr></thead>
-                            <tbody className="divide-y">{filtered.slice(0,10).map(c=><tr key={c.id}>
-                                <td className="p-3">{c.date}</td><td className="p-3 font-bold">{c.studentName}</td><td className="p-3">{c.type}</td><td className="p-3">{c.risk}</td>
-                                <td className="p-3 flex gap-2">
-                                    <button onClick={()=>onEdit(c)} className="text-indigo-600"><Icon name="edit-2" size={16}/></button>
-                                    <button onClick={()=>onPrint("Ficha", c, 'single')} className="text-slate-500"><Icon name="file-text" size={16}/></button>
-                                    <button onClick={()=>onDelete(c.id)} className="text-red-500"><Icon name="trash-2" size={16}/></button>
-                                </td>
-                            </tr>)}</tbody>
+                            <thead className="bg-slate-50 text-slate-500 font-medium"><tr><th className="p-4">Fecha</th><th className="p-4">Estudiante</th><th className="p-4">Curso</th><th className="p-4">Tipo</th><th className="p-4">Riesgo</th><th className="p-4 text-right">Acciones</th></tr></thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {filtered.slice(0,10).map(c=><tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                                    <td className="p-4 text-slate-500">{new Date(c.date).toLocaleDateString()}</td>
+                                    <td className="p-4 font-bold text-slate-700">{c.studentName}</td>
+                                    <td className="p-4 text-slate-600">{c.course}</td>
+                                    <td className="p-4"><span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs">{c.type}</span></td>
+                                    <td className="p-4"><span className={`px-2 py-1 rounded-full text-xs font-bold ${c.risk==='Alto'?'bg-rose-100 text-rose-600':'bg-emerald-100 text-emerald-600'}`}>{c.risk}</span></td>
+                                    <td className="p-4 flex justify-end gap-2">
+                                        <button onClick={()=>onPrint("Ficha Caso", c, 'single')} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="PDF"><Icon name="file-text" size={18}/></button>
+                                        <button onClick={()=>onEdit(c)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Editar"><Icon name="edit-3" size={18}/></button>
+                                        <button onClick={()=>onDelete(c.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Eliminar"><Icon name="trash-2" size={18}/></button>
+                                    </td>
+                                </tr>)}
+                            </tbody>
                         </table>
                     </div>
                 </div>
@@ -257,222 +306,339 @@
         };
 
         const CaseForm = ({ config, initialData, onSave, onCancel, isReferral }) => {
-            const [d, setD] = useState(initialData || { studentName: '', course: config.courses[0], date: new Date().toISOString().split('T')[0], risk: 'Bajo', description: '', actions: [], interventions: [] });
-            const [newInt, setNewInt] = useState({date: new Date().toISOString().split('T')[0], content: ''});
+            const [d, setD] = useState(() => {
+                const base = initialData || { 
+                    studentName: '', course: config.courses[0], date: new Date().toISOString().split('T')[0], 
+                    risk: 'Bajo', description: '', actions: [], interventions: [], 
+                    professional: config.professionals[0], type: config.caseTypes[0]
+                };
+                return { 
+                    ...base, 
+                    actions: base.actions || [], 
+                    interventions: base.interventions || [] 
+                };
+            });
             const [tab, setTab] = useState('general');
+            const [newInt, setNewInt] = useState({ date: new Date().toISOString().split('T')[0], content: "" });
 
-            const addInt = () => { if(newInt.content) { setD({...d, interventions: [...(d.interventions||[]), newInt]}); setNewInt({...newInt, content:''}); } };
-
-            // Asegurar que interventions existe
-            useEffect(() => {
-                if (!d.interventions) setD(prev => ({...prev, interventions: []}));
-            }, []);
+            const toggle = a => setD(p => ({...p, actions: (p.actions||[]).includes(a) ? p.actions.filter(x=>x!==a) : [...(p.actions||[]), a]}));
+            const addInt = () => { if(newInt.content){ setD({...d, interventions: [newInt, ...d.interventions]}); setNewInt({...newInt, content:''}); } };
 
             return (
-                <div className="max-w-4xl mx-auto bg-white p-8 rounded shadow fade-in">
-                    <div className="flex justify-between mb-4"><h2 className="text-xl font-bold">{initialData ? 'Editar Caso' : 'Nuevo Caso'}</h2><button onClick={onCancel}>Cancelar</button></div>
-                    
-                    {!isReferral && (
-                        <div className="flex border-b mb-4">
-                            <button onClick={()=>setTab('general')} className={`mr-4 pb-2 ${tab==='general'?'border-b-2 border-indigo-600 font-bold':''}`}>General</button>
-                            <button onClick={()=>setTab('bitacora')} className={`pb-2 ${tab==='bitacora'?'border-b-2 border-indigo-600 font-bold':''}`}>Bitácora</button>
+                <div className="max-w-4xl mx-auto pb-20 fade-in">
+                    <div className="flex justify-between items-center mb-6">
+                        <div>
+                            <h2 className="text-2xl font-bold text-slate-800">{isReferral ? "Nueva Derivación" : (initialData ? "Editar Caso" : "Nuevo Caso")}</h2>
+                            <p className="text-slate-500 text-sm">Complete la información requerida</p>
                         </div>
-                    )}
+                        <button onClick={onCancel} className="text-slate-500 hover:text-slate-800 font-medium px-4 py-2 hover:bg-white hover:shadow-sm rounded-lg transition-all">Cancelar</button>
+                    </div>
 
-                    {tab === 'general' ? (
-                        <>
-                            <div className="grid md:grid-cols-2 gap-4 mb-4">
-                                <input className="border p-2 rounded" placeholder="Estudiante" value={d.studentName} onChange={e=>setD({...d, studentName:e.target.value})} />
-                                <select className="border p-2 rounded" value={d.course} onChange={e=>setD({...d, course:e.target.value})}>{config.courses.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                <select className="border p-2 rounded" value={d.type} onChange={e=>setD({...d, type:e.target.value})}>{(config.caseTypes||[]).map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                <select className="border p-2 rounded" value={d.risk} onChange={e=>setD({...d, risk:e.target.value})}><option>Bajo</option><option>Medio</option><option>Alto</option></select>
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        {!isReferral && (
+                            <div className="flex border-b bg-slate-50/50">
+                                <button onClick={()=>setTab('general')} className={`flex-1 py-4 text-sm font-bold transition-colors ${tab==='general'?'text-indigo-600 border-b-2 border-indigo-600 bg-white':'text-slate-500 hover:text-slate-700'}`}>Datos Generales</button>
+                                <button onClick={()=>setTab('bitacora')} className={`flex-1 py-4 text-sm font-bold transition-colors ${tab==='bitacora'?'text-indigo-600 border-b-2 border-indigo-600 bg-white':'text-slate-500 hover:text-slate-700'}`}>Bitácora & Seguimiento</button>
                             </div>
-                            <textarea className="w-full border p-2 rounded mb-4" rows="3" placeholder="Descripción" value={d.description} onChange={e=>setD({...d, description:e.target.value})} />
-                        </>
-                    ) : (
-                        <div className="mb-4 bg-slate-50 p-4 rounded border">
-                            <h3 className="font-bold text-sm mb-2">Bitácora de Intervenciones</h3>
-                            <div className="flex gap-2 mb-2"><input type="date" className="border p-1 rounded" value={newInt.date} onChange={e=>setNewInt({...newInt, date:e.target.value})} /><input className="border p-1 rounded flex-1" placeholder="Observación" value={newInt.content} onChange={e=>setNewInt({...newInt, content:e.target.value})} /><button onClick={addInt} className="bg-indigo-600 text-white px-3 rounded">+</button></div>
-                            <div className="space-y-2 max-h-40 overflow-y-auto">{(d.interventions||[]).map((int,i)=><div key={i} className="text-sm border-l-2 border-indigo-400 pl-2"><b>{int.date}:</b> {int.content}</div>)}</div>
-                        </div>
-                    )}
+                        )}
 
-                    <div className="flex justify-end gap-2">
-                        <button onClick={()=>onSave(d)} className="bg-indigo-600 text-white px-4 py-2 rounded">Guardar</button>
+                        <div className="p-8">
+                            {tab === 'general' || isReferral ? (
+                                <div className="space-y-6">
+                                    <div className="grid md:grid-cols-2 gap-6">
+                                        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Estudiante</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" value={d.studentName} onChange={e=>setD({...d, studentName:e.target.value})} placeholder="Nombre completo" /></div>
+                                        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Curso</label><select className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={d.course} onChange={e=>setD({...d, course:e.target.value})}>{config.courses.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                                        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha</label><input type="date" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={d.date} onChange={e=>setD({...d, date:e.target.value})} /></div>
+                                        
+                                        {!isReferral ? (
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Profesional</label><select className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={d.professional} onChange={e=>setD({...d, professional:e.target.value})}>{config.professionals.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                                        ) : (
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Causa</label><select className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={d.cause} onChange={e=>setD({...d, cause:e.target.value})}><option value="">Seleccione...</option>{config.caseTypes.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                                        )}
+                                    </div>
+
+                                    {!isReferral && (
+                                        <div className="grid md:grid-cols-2 gap-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipificación</label><select className="w-full p-2 bg-white border border-slate-200 rounded-lg" value={d.type} onChange={e=>setD({...d, type:e.target.value})}>{config.caseTypes.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Riesgo</label><div className="flex gap-2">{['Bajo','Medio','Alto'].map(r=><button key={r} onClick={()=>setD({...d, risk:r})} className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-all ${d.risk===r ? (r==='Alto'?'bg-rose-500 text-white border-rose-500':r==='Medio'?'bg-amber-400 text-white border-amber-400':'bg-emerald-500 text-white border-emerald-500') : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>{r}</button>)}</div></div>
+                                        </div>
+                                    )}
+
+                                    <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Descripción de los hechos</label><textarea className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" rows="4" value={d.description} onChange={e=>setD({...d, description:e.target.value})} placeholder="Detalle la situación..."></textarea></div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{isReferral ? "Estrategias Previas" : "Acciones Realizadas"}</label>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                            {(isReferral ? config.strategies : config.actions).map(a => (
+                                                <button key={a} onClick={()=>{
+                                                    const key = isReferral ? 'appliedStrategies' : 'actions';
+                                                    const list = d[key] || [];
+                                                    setD({...d, [key]: list.includes(a) ? list.filter(x=>x!==a) : [...list, a]});
+                                                }} className={`p-3 rounded-xl border text-left text-sm transition-all flex items-center gap-2 ${(d[isReferral?'appliedStrategies':'actions']||[]).includes(a)?'bg-indigo-50 border-indigo-500 text-indigo-700 font-bold shadow-sm':'bg-white border-slate-200 text-slate-600 hover:border-indigo-300'}`}>
+                                                    <div className={`w-4 h-4 rounded border flex items-center justify-center ${(d[isReferral?'appliedStrategies':'actions']||[]).includes(a)?'bg-indigo-600 border-indigo-600':'border-slate-300'}`}>{ (d[isReferral?'appliedStrategies':'actions']||[]).includes(a) && <Icon name="check" size={10} className="text-white"/> }</div>
+                                                    {a}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    <div className="bg-indigo-50 p-6 rounded-2xl border border-indigo-100 shadow-sm">
+                                        <h3 className="font-bold text-indigo-900 mb-4 flex items-center gap-2"><Icon name="pen-tool" size={18}/> Nuevo Registro</h3>
+                                        <div className="flex gap-4 mb-3">
+                                            <input type="date" className="border border-indigo-200 p-2 rounded-lg text-sm bg-white" value={newInt.date} onChange={e=>setNewInt({...newInt, date:e.target.value})} />
+                                            <div className="flex-1 bg-white border border-indigo-200 p-2 rounded-lg text-sm text-slate-500 flex items-center gap-2"><Icon name="user" size={14}/> {d.professional}</div>
+                                        </div>
+                                        <textarea className="w-full p-3 border border-indigo-200 rounded-xl mb-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" rows="3" placeholder="Detalle el avance, acuerdo o intervención..." value={newInt.content} onChange={e=>setNewInt({...newInt, content:e.target.value})} />
+                                        <button onClick={addInt} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all flex items-center gap-2"><Icon name="plus" size={16}/> Agregar a Bitácora</button>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <h3 className="font-bold text-slate-700 text-lg">Historial</h3>
+                                        {(!d.interventions || d.interventions.length === 0) && <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-400">No hay registros en la bitácora aún.</div>}
+                                        {d.interventions && d.interventions.map((int,i)=>(
+                                            <div key={i} className="flex gap-4 group">
+                                                <div className="flex flex-col items-center">
+                                                    <div className="w-3 h-3 rounded-full bg-indigo-200 group-hover:bg-indigo-500 transition-colors mt-2"></div>
+                                                    {i !== d.interventions.length-1 && <div className="w-0.5 h-full bg-slate-200 my-1"></div>}
+                                                </div>
+                                                <div className="flex-1 pb-4">
+                                                    <div className="flex justify-between items-baseline mb-1">
+                                                        <span className="font-bold text-slate-800 text-sm">{new Date(int.date).toLocaleDateString()}</span>
+                                                        <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{int.professional}</span>
+                                                    </div>
+                                                    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-slate-600 text-sm leading-relaxed">{int.content}</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-end">
+                            <button onClick={()=>onSave(d)} className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:shadow-xl transition-all flex items-center gap-2 transform active:scale-95">
+                                <Icon name="save" size={20}/> Guardar Cambios
+                            </button>
+                        </div>
                     </div>
                 </div>
             );
         };
 
-        // --- MY REFERRALS LIST (FOR TEACHERS) ---
-        const MyReferralsList = ({ items }) => {
-            const [selected, setSelected] = useState(null);
-            
-            return (
-                <div className="fade-in">
-                    <h2 className="text-2xl font-bold mb-4">Mis Derivaciones</h2>
-                    <div className="bg-white rounded shadow overflow-hidden">
+        const ConfigView = ({ config, users, onUpdateConf, onUpdateRole }) => (
+            <div className="fade-in max-w-4xl mx-auto space-y-8 pb-20">
+                <h2 className="text-2xl font-bold text-slate-800">Configuración</h2>
+                
+                <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 className="font-bold text-lg mb-6 flex items-center gap-2 text-indigo-700"><Icon name="users"/> Gestión de Usuarios</h3>
+                    <div className="overflow-hidden rounded-xl border border-slate-200">
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-50 text-slate-500"><tr><th className="p-3">Fecha</th><th className="p-3">Estudiante</th><th className="p-3">Estado</th><th className="p-3">Acción</th></tr></thead>
-                            <tbody className="divide-y">{items.map(r=><tr key={r.id}>
-                                <td className="p-3">{new Date(r.date).toLocaleDateString()}</td>
-                                <td className="p-3">{r.studentName}</td>
-                                <td className="p-3"><span className={`px-2 py-1 rounded text-xs ${r.status==='Pendiente'?'bg-yellow-100':'bg-green-100'}`}>{r.status||'Pendiente'}</span></td>
-                                <td className="p-3">
-                                    {r.status !== 'Pendiente' && <button onClick={()=>setSelected(r)} className="text-indigo-600 flex items-center gap-1"><Icon name="eye" size={14}/> Ver Avance</button>}
+                            <thead className="bg-slate-50 text-slate-500 font-bold"><tr><th className="p-4">Usuario</th><th className="p-4">Rol Actual</th><th className="p-4 text-right">Acción</th></tr></thead>
+                            <tbody className="divide-y divide-slate-100">{users.map(u => <tr key={u.id}>
+                                <td className="p-4 font-medium">{u.id}</td>
+                                <td className="p-4"><span className={`px-2 py-1 rounded-full text-xs font-bold ${u.role==='admin'?'bg-indigo-100 text-indigo-700':'bg-emerald-100 text-emerald-700'}`}>{u.role==='admin'?'Equipo Convivencia':'Docente'}</span></td>
+                                <td className="p-4 text-right">
+                                    <button onClick={()=>onUpdateRole(u.id, u.role==='admin'?'docente':'admin')} className="text-indigo-600 hover:underline font-medium text-xs">Cambiar Rol</button>
                                 </td>
                             </tr>)}</tbody>
                         </table>
                     </div>
-
-                    {selected && (
-                        <div className="modal-overlay" onClick={()=>setSelected(null)}>
-                            <div className="bg-white p-6 rounded-xl max-w-lg w-full" onClick={e=>e.stopPropagation()}>
-                                <h3 className="font-bold text-lg mb-4">Historial: {selected.studentName}</h3>
-                                <div className="space-y-3 max-h-60 overflow-y-auto">
-                                    <div className="bg-slate-50 p-2 rounded text-sm">Estado actual: {selected.status}</div>
-                                    {selected.interventions && selected.interventions.map((int, i) => (
-                                        <div key={i} className="border-l-2 border-indigo-300 pl-2 text-sm">
-                                            <span className="text-xs text-gray-500">{new Date(int.date).toLocaleDateString()}</span>
-                                            <p>{int.content}</p>
-                                        </div>
-                                    ))}
-                                    {(!selected.interventions || selected.interventions.length === 0) && <p className="text-sm text-gray-400">Sin intervenciones registradas aún.</p>}
-                                </div>
-                                <button onClick={()=>setSelected(null)} className="mt-4 w-full border p-2 rounded">Cerrar</button>
-                            </div>
-                        </div>
-                    )}
                 </div>
-            );
-        };
 
-        // --- OTHER COMPONENTS ---
-        const ConfigView = ({ config, users, onUpdateConf, onUpdateRole }) => (<div className="fade-in"><h2 className="text-2xl font-bold mb-4">Configuración</h2><div className="bg-white p-6 rounded shadow mb-6"><h3 className="font-bold mb-2">Usuarios</h3>{users.map(u=><div key={u.id} className="flex justify-between py-2 border-b"><span>{u.id}</span><button onClick={()=>onUpdateRole(u.id, u.role==='admin'?'docente':'admin')} className="text-indigo-600">{u.role}</button></div>)}</div><div className="bg-white p-6 rounded shadow"><h3 className="font-bold mb-2">Datos</h3><input className="border p-2 rounded w-full" value={config.managerName} onChange={e=>onUpdateConf({...config, managerName:e.target.value})} /></div></div>);
-        const StudentList = ({ cases, onSelect }) => { const list=[...new Set(cases.map(c=>c.studentName))]; return <div className="fade-in"><h2 className="text-2xl font-bold mb-4">Alumnos</h2><div className="bg-white rounded shadow overflow-hidden"><table className="w-full text-left text-sm"><thead className="bg-slate-50"><tr><th className="p-3">Nombre</th><th className="p-3"></th></tr></thead><tbody>{list.map(s=><tr key={s} className="border-t"><td className="p-3">{s}</td><td className="p-3"><button onClick={()=>onSelect(s)} className="text-indigo-600">Ver Ficha</button></td></tr>)}</tbody></table></div></div>; };
-        const StudentProfile = ({ studentName, cases, onBack, config, onEdit }) => { const hist=cases.filter(c=>c.studentName===studentName); return <div className="fade-in pb-20"><button onClick={onBack} className="mb-4">Volver</button><div className="bg-white p-8 rounded shadow"><h1 className="text-3xl font-bold mb-6">{studentName}</h1><button onClick={()=>generatePDF("Informe Estudiante", hist, 'student', studentName, config.managerName)} className="bg-indigo-600 text-white px-4 py-2 rounded mb-4">Descargar Informe PDF</button>{hist.map(h=><div key={h.id} className="border-b py-4"><div>{h.date} - {h.type}</div></div>)}</div></div>; };
-        const ReportsView = ({ cases, config }) => <div className="fade-in"><h2 className="text-2xl font-bold mb-4">Reportes</h2><div className="bg-white p-6 rounded shadow"><p>Seleccione un curso para generar informe PDF.</p></div></div>; 
-        const Inbox = ({ referrals, onProcess, onDelete }) => <div className="fade-in"><h2 className="text-2xl font-bold mb-4">Bandeja</h2>{referrals.map(r=><div key={r.id} className="bg-white p-4 mb-4 rounded shadow"><h3 className="font-bold">{r.studentName}</h3><p>{r.description}</p><button onClick={()=>onProcess(r)} className="bg-indigo-600 text-white px-3 py-1 rounded mt-2 text-sm">Gestionar</button></div>)}</div>;
-        const ReferralForm = ({ config, onSave }) => {
-            const [d, setD] = useState({ studentName: '', course: config.courses[0], date: new Date().toISOString().split('T')[0], cause: '', description: '' });
-            return <div className="bg-white p-6 rounded shadow"><h2 className="font-bold mb-4">Derivación</h2><input className="border p-2 w-full mb-2" placeholder="Estudiante" value={d.studentName} onChange={e=>setD({...d, studentName:e.target.value})} /><button onClick={()=>onSave(d)} className="bg-indigo-600 text-white px-4 py-2 rounded">Enviar</button></div>;
-        };
+                <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-indigo-700"><Icon name="settings"/> Datos Institucionales</h3>
+                    <label className="text-sm font-bold text-slate-600 block mb-2">Nombre del Encargado/a de Convivencia (Para firmas)</label>
+                    <div className="flex gap-3">
+                        <input className="flex-1 p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500" value={config.managerName} onChange={e=>onUpdateConf({...config, managerName:e.target.value})} />
+                        <button className="bg-indigo-600 text-white px-6 rounded-xl font-bold hover:bg-indigo-700 transition" onClick={()=>onUpdateConf(config)}>Guardar</button>
+                    </div>
+                </div>
+            </div>
+        );
 
-        // --- APP PRINCIPAL ---
+        // --- Logic & Init ---
         const App = () => {
             const [user, setUser] = useState(null);
             const [role, setRole] = useState('docente');
             const [view, setView] = useState('dashboard');
-            const [data, setData] = useState({ cases: [], referrals: [], users: [] });
+            const [data, setData] = useState({ cases: [], referrals: [], users: [], allRaw: [] });
             const [config, setConfig] = useState(defaultConfig);
+            const [notif, setNotif] = useState(null);
             const [editing, setEditing] = useState(null);
-            const [selectedStudent, setSelectedStudent] = useState(null);
+            const [loading, setLoading] = useState(true);
 
             useEffect(() => {
-                return auth.onAuthStateChanged(async (u) => {
-                    setUser(u);
+                auth.onAuthStateChanged(async (u) => {
                     if (u) {
-                        const userDoc = await db.collection('users').doc(u.email).get();
-                        if (userDoc.exists) setRole(userDoc.data().role);
+                        setUser(u);
+                        const uDoc = await db.collection('users').doc(u.email).get();
+                        if(uDoc.exists) setRole(uDoc.data().role);
                         else {
-                            const anyUser = await db.collection('users').get();
-                            const newRole = anyUser.empty ? 'admin' : 'docente';
-                            await db.collection('users').doc(u.email).set({ role: newRole });
-                            setRole(newRole);
+                            const snap = await db.collection('users').get();
+                            const r = snap.empty ? 'admin' : 'docente';
+                            await db.collection('users').doc(u.email).set({role:r});
+                            setRole(r);
                         }
-                        
-                        db.collection('cases').onSnapshot(snap => {
-                            const all = snap.docs.map(d => ({id:d.id, ...d.data()}));
-                            setData(prev => ({
-                                ...prev,
-                                cases: all.filter(c => !c.isReferral),
-                                referrals: all.filter(c => c.isReferral && c.status === 'Pendiente'),
-                                all: all
-                            }));
-                        });
 
-                        db.collection('config').doc('main').onSnapshot(snap => {
-                            if(snap.exists) setConfig({ ...defaultConfig, ...snap.data() });
+                        db.collection('cases').onSnapshot(s => {
+                            const all = s.docs.map(d => ({id:d.id, ...d.data()})).sort((a,b) => new Date(b.date)-new Date(a.date));
+                            setData({ allRaw: all, cases: all.filter(x=>!x.isReferral), referrals: all.filter(x=>x.isReferral && x.status==='Pendiente'), users: data.users });
                         });
+                        db.collection('config').doc('main').onSnapshot(s => { if(s.exists) setConfig({...defaultConfig, ...s.data()}); });
+                        db.collection('users').onSnapshot(s => setData(prev => ({...prev, users: s.docs.map(d => ({id:d.id, ...d.data()}))})));
                         
-                        db.collection('users').onSnapshot(snap => {
-                             setData(prev => ({ ...prev, users: snap.docs.map(d => ({id:d.id, ...d.data()})) }));
-                        });
+                        setLoading(false);
+                    } else {
+                        setUser(null);
+                        setLoading(false);
                     }
                 });
             }, []);
 
-            const saveCase = async (d) => {
-                const finalData = { ...d, updatedBy: user.email, updatedAt: new Date().toISOString() };
-                if (!d.createdAt) { finalData.createdAt = new Date().toISOString(); finalData.createdBy = user.email; }
-                
-                if (editing && editing.id) await db.collection('cases').doc(editing.id).update(finalData);
-                else await db.collection('cases').add(finalData);
-                
-                setEditing(null);
-                setView(role === 'admin' ? 'dashboard' : 'my_referrals');
+            const notify = (msg, type='success') => { setNotif({msg,type}); setTimeout(()=>setNotif(null), 3000); };
+            
+            const handleSave = async (d) => {
+                const final = { ...d, updatedBy: user.email, updatedAt: new Date().toISOString() };
+                if (!d.createdAt) { final.createdAt = new Date().toISOString(); final.createdBy = user.email; }
+                try {
+                    if(editing && editing.id) await db.collection('cases').doc(editing.id).update(final);
+                    else await db.collection('cases').add(final);
+                    notify("Guardado correctamente");
+                    setEditing(null);
+                    setView(role==='admin' ? 'dashboard' : 'my_referrals');
+                } catch(e) { notify(e.message, 'error'); }
             };
 
-            const deleteItem = async (id) => { if(confirm("¿Borrar?")) await db.collection('cases').doc(id).delete(); };
-            const updateRole = async (email, r) => await db.collection('users').doc(email).update({role: r});
-            const updateConf = async (c) => await db.collection('config').doc('main').set(c, {merge:true});
+            const handleDelete = async (id) => { if(confirm("¿Eliminar?")) await db.collection('cases').doc(id).delete(); };
+            const handleUpdateRole = async (email, r) => { await db.collection('users').doc(email).update({role: r}); notify("Rol actualizado"); };
+            const handleUpdateConf = async (c) => { await db.collection('config').doc('main').set(c, {merge:true}); notify("Configuración guardada"); };
 
-            if (!user) return <Login onLogin={(e,p,r) => r ? auth.createUserWithEmailAndPassword(e,p) : auth.signInWithEmailAndPassword(e,p)} />;
+            if(loading) return <div className="loader-container"><div className="spinner"></div></div>;
+            if(!user) return (
+                <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
+                    <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm glass-panel text-center">
+                        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-indigo-300"><Icon name="shield-check" size={32}/></div>
+                        <h1 className="text-2xl font-bold text-slate-800 mb-2">Bienvenido</h1>
+                        <p className="text-slate-500 mb-8 text-sm">Plataforma de Gestión de Convivencia</p>
+                        <form onSubmit={async (e) => {
+                            e.preventDefault();
+                            const email = e.target.email.value;
+                            const pass = e.target.pass.value;
+                            try { await auth.signInWithEmailAndPassword(email, pass); } 
+                            catch(err) { if(err.code === 'auth/user-not-found') { await auth.createUserWithEmailAndPassword(email, pass); } else alert(err.message); }
+                        }}>
+                            <input name="email" className="w-full p-4 mb-3 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Correo electrónico" type="email" required />
+                            <input name="pass" className="w-full p-4 mb-6 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Contraseña" type="password" required />
+                            <button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all transform active:scale-95">Ingresar / Registrar</button>
+                        </form>
+                    </div>
+                </div>
+            );
 
             const isAdmin = role === 'admin';
 
             return (
                 <div className="flex h-screen text-slate-800">
-                    <aside className="w-64 bg-slate-900 text-white flex-col hidden md:flex">
-                        <div className="p-6 border-b border-slate-700">
-                            <h2 className="font-bold text-indigo-400">Convivencia Pro</h2>
-                            <p className="text-xs text-slate-400 mt-1">{user.email}</p>
-                            <span className="text-[10px] bg-slate-700 px-2 rounded inline-block mt-2">{role.toUpperCase()}</span>
+                    <aside className="w-72 gradient-sidebar text-white flex-col hidden md:flex shadow-2xl">
+                        <div className="p-8 border-b border-white/10">
+                            <h2 className="font-bold text-xl tracking-tight flex items-center gap-2"><Icon name="shield"/> Convivencia</h2>
+                            <p className="text-xs mt-2 text-indigo-200 truncate">{user.email}</p>
+                            <span className="text-[10px] uppercase bg-white/10 px-3 py-1 rounded-full mt-3 inline-block font-bold tracking-wider">{isAdmin?'Equipo Directivo':'Docente'}</span>
                         </div>
-                        <nav className="flex-1 p-4 space-y-1">
+                        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
                             {isAdmin ? (
                                 <>
-                                    <button onClick={()=>setView('dashboard')} className={`w-full text-left p-2 rounded ${view==='dashboard'?'bg-indigo-600':''}`}>Dashboard</button>
-                                    <button onClick={()=>setView('inbox')} className={`w-full text-left p-2 rounded ${view==='inbox'?'bg-indigo-600':''}`}>Bandeja ({data.referrals.length})</button>
-                                    <button onClick={()=>{setEditing(null); setView('register');}} className={`w-full text-left p-2 rounded ${view==='register'?'bg-indigo-600':''}`}>Nuevo Caso</button>
-                                    <button onClick={()=>{setSelectedStudent(null); setView('students');}} className={`w-full text-left p-2 rounded ${view==='students'?'bg-indigo-600':''}`}>Estudiantes</button>
-                                    <button onClick={()=>setView('config')} className={`w-full text-left p-2 rounded ${view==='config'?'bg-indigo-600':''}`}>Configuración</button>
+                                    <MenuBtn active={view==='dashboard'} onClick={()=>setView('dashboard')} icon="layout-dashboard" label="Panel General" />
+                                    <MenuBtn active={view==='inbox'} onClick={()=>setView('inbox')} icon="inbox" label={`Derivaciones (${data.referrals.length})`} badge={data.referrals.length} />
+                                    <MenuBtn active={view==='register'} onClick={()=>{setEditing(null); setView('register');}} icon="file-plus" label="Registrar Caso" />
+                                    <MenuBtn active={view==='students'} onClick={()=>{setSelectedStudent(null); setView('students');}} icon="users" label="Directorio Alumnos" />
+                                    <MenuBtn active={view==='reports'} onClick={()=>setView('reports')} icon="file-bar-chart-2" label="Reportes PDF" />
+                                    <div className="pt-4 mt-4 border-t border-white/10"><MenuBtn active={view==='config'} onClick={()=>setView('config')} icon="settings" label="Configuración" /></div>
                                 </>
                             ) : (
                                 <>
-                                    <button onClick={()=>{setEditing(null); setView('referral');}} className={`w-full text-left p-2 rounded ${view==='referral'?'bg-indigo-600':''}`}>Nueva Derivación</button>
-                                    <button onClick={()=>setView('my_referrals')} className={`w-full text-left p-2 rounded ${view==='my_referrals'?'bg-indigo-600':''}`}>Mis Derivaciones</button>
+                                    <MenuBtn active={view==='referral'} onClick={()=>{setEditing(null); setView('referral');}} icon="send" label="Nueva Derivación" />
+                                    <MenuBtn active={view==='my_referrals'} onClick={()=>setView('my_referrals')} icon="list" label="Historial Envíos" />
                                 </>
                             )}
                         </nav>
-                        <button onClick={()=>auth.signOut()} className="p-4 border-t border-slate-700 hover:bg-slate-800">Cerrar Sesión</button>
+                        <button onClick={()=>auth.signOut()} className="p-6 border-t border-white/10 hover:bg-white/5 flex items-center gap-3 transition-colors text-sm font-medium"><Icon name="log-out"/> Cerrar Sesión</button>
                     </aside>
-                    
-                    <main className="flex-1 overflow-y-auto p-8">
-                        {isAdmin && view === 'dashboard' && <Dashboard cases={data.cases} config={config} onEdit={c=>{setEditing(c); setView('register');}} onDelete={deleteItem} onPrint={(t,d,ty)=>generatePDF(t,d,ty,'',config.managerName)} />}
+
+                    <main className="flex-1 overflow-y-auto relative bg-slate-50">
+                        <header className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-slate-200 p-4 px-8 flex justify-between items-center z-40 md:hidden">
+                            <span className="font-bold text-slate-800">Convivencia Pro</span>
+                            <button onClick={()=>auth.signOut()}><Icon name="log-out" className="text-slate-500"/></button>
+                        </header>
                         
-                        {isAdmin && view === 'inbox' && <Inbox referrals={data.referrals} onProcess={r=>{setEditing({...r, isReferral:false, status:'Abierto'}); setView('register');}} onDelete={deleteItem} />}
+                        <div className="p-4 md:p-8 max-w-7xl mx-auto">
+                            {notif && <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-xl shadow-2xl text-white z-50 flex gap-3 items-center font-medium animate-bounce ${notif.type==='error'?'bg-rose-500':'bg-emerald-600'}`}><Icon name={notif.type==='error'?'alert-circle':'check-circle'}/> {notif.msg}</div>}
 
-                        {(view === 'register' || view === 'referral') && (
-                            <CaseForm 
-                                config={config} 
-                                initialData={editing} 
-                                isReferral={!isAdmin} 
-                                onSave={(d) => saveCase(isAdmin ? d : {...d, isReferral: true, status: 'Pendiente'})}
-                                onCancel={()=>setView(isAdmin ? 'dashboard' : 'my_referrals')} 
-                            />
-                        )}
+                            {isAdmin && view==='dashboard' && <Dashboard cases={data.cases} config={config} onEdit={c=>{setEditing(c); setView('register');}} onDelete={handleDelete} onPrint={(t,d,ty)=>generatePDF(t,d,ty,'',config.managerName)} />}
+                            {isAdmin && view==='inbox' && (
+                                <div className="fade-in">
+                                    <h2 className="text-2xl font-bold text-slate-800 mb-6">Bandeja de Entrada</h2>
+                                    <div className="grid gap-4">
+                                        {data.referrals.length===0 && <div className="text-center p-12 text-slate-400 bg-white rounded-2xl border border-dashed border-slate-300">No hay derivaciones pendientes</div>}
+                                        {data.referrals.map(r=><div key={r.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:border-indigo-300 transition-all group">
+                                            <div className="flex justify-between mb-2">
+                                                <div><span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-full uppercase tracking-wide">Pendiente</span><h3 className="font-bold text-lg mt-1">{r.studentName}</h3><p className="text-xs text-slate-400">Enviado por: {r.createdBy}</p></div>
+                                                <div className="flex gap-2 opacity-50 group-hover:opacity-100 transition-opacity"><button onClick={()=>generatePDF("Ficha Derivacion", r, 'referral_single')} className="p-2 bg-slate-50 rounded-lg hover:bg-indigo-50 hover:text-indigo-600"><Icon name="printer"/></button><button onClick={()=>handleDelete(r.id)} className="p-2 bg-slate-50 rounded-lg hover:bg-rose-50 hover:text-rose-600"><Icon name="trash-2"/></button></div>
+                                            </div>
+                                            <p className="text-sm text-slate-600 mb-4 bg-slate-50 p-3 rounded-lg">{r.description}</p>
+                                            <button onClick={()=>{setEditing({...r, isReferral:false, status:'En Gestión'}); setView('register');}} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 flex items-center justify-center gap-2"><Icon name="check-square"/> Procesar Caso</button>
+                                        </div>)}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {(view==='register' || view==='referral') && <CaseForm config={config} initialData={editing} isReferral={!isAdmin} onSave={d=>saveCase(isAdmin?d:{...d, isReferral:true, status:'Pendiente'})} onCancel={()=>setView(isAdmin?'dashboard':'my_referrals')} />}
+                            
+                            {isAdmin && view==='students' && !selectedStudent && <div className="fade-in"><h2 className="text-2xl font-bold mb-6">Directorio</h2><div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-xs"><tr><th className="p-4">Estudiante</th><th className="p-4">Curso</th><th className="p-4">N° Casos</th><th className="p-4"></th></tr></thead><tbody className="divide-y divide-slate-100">{Object.values(data.cases.reduce((acc,c)=>{if(!acc[c.studentName])acc[c.studentName]={name:c.studentName,course:c.course,count:0};acc[c.studentName].count++;return acc},{})).map(s=><tr key={s.name} className="hover:bg-slate-50"><td className="p-4 font-bold text-slate-700">{s.name}</td><td className="p-4">{s.course}</td><td className="p-4"><span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md font-bold">{s.count}</span></td><td className="p-4 text-right"><button onClick={()=>setSelectedStudent(s.name)} className="text-indigo-600 hover:text-indigo-800 font-medium text-xs border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-50">Ver Perfil</button></td></tr>)}</tbody></table></div></div>}
+                            
+                            {isAdmin && view==='students' && selectedStudent && <StudentProfile studentName={selectedStudent} cases={data.cases} onBack={()=>setSelectedStudent(null)} config={config} onEdit={c=>{setEditing(c); setView('register');}} />}
+                            
+                            {isAdmin && view==='config' && <ConfigView config={config} users={data.users} onUpdateConf={handleUpdateConf} onUpdateRole={handleUpdateRole} />}
+                            {isAdmin && view==='reports' && (
+                                <div className="fade-in max-w-2xl mx-auto text-center mt-10">
+                                    <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-600"><Icon name="file-text" size={40}/></div>
+                                    <h2 className="text-2xl font-bold text-slate-800 mb-2">Centro de Reportes</h2>
+                                    <p className="text-slate-500 mb-8">Genera informes detallados por curso para imprimir o archivar.</p>
+                                    <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 text-left">
+                                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Seleccionar Curso</label>
+                                        <div className="flex gap-3">
+                                            <select id="courseReport" className="flex-1 p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500">{config.courses.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                            <button onClick={()=>{const c = document.getElementById('courseReport').value; generatePDF(`Reporte ${c}`, data.cases.filter(x=>x.course===c), 'course', '', config.managerName)}} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200">Generar PDF</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
-                        {isAdmin && view === 'students' && !selectedStudent && <StudentList cases={data.cases} onSelect={s=>{setSelectedStudent(s);}} />}
-                        {isAdmin && view === 'students' && selectedStudent && <StudentProfile studentName={selectedStudent} cases={data.cases} onBack={()=>setSelectedStudent(null)} config={config} onEdit={c=>{setEditing(c); setView('register');}} />}
-
-                        {isAdmin && view === 'config' && <ConfigView config={config} users={data.users} onUpdateConf={updateConf} onUpdateRole={updateRole} />}
-
-                        {!isAdmin && view === 'my_referrals' && <MyReferralsList items={(data.all||[]).filter(x => x.createdBy === user.email)} />}
+                            {!isAdmin && view==='my_referrals' && (
+                                <div className="fade-in">
+                                    <h2 className="text-2xl font-bold mb-6">Historial de Envíos</h2>
+                                    <div className="grid gap-4">
+                                        {data.allRaw.filter(x=>x.createdBy===user.email).map(r=><div key={r.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center">
+                                            <div><h4 className="font-bold text-slate-800">{r.studentName}</h4><p className="text-xs text-slate-500">{new Date(r.date).toLocaleDateString()} • {r.type || 'Derivación'}</p></div>
+                                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${r.status==='Pendiente'?'bg-amber-100 text-amber-700':r.status==='En Gestión'?'bg-indigo-100 text-indigo-700':'bg-emerald-100 text-emerald-700'}`}>{r.status||'Pendiente'}</span>
+                                        </div>)}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </main>
                 </div>
             );
         };
+
+        const MenuBtn = ({ active, onClick, icon, label, badge }) => (
+            <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${active ? 'bg-white/10 text-white font-medium shadow-inner' : 'text-indigo-100 hover:bg-white/5 hover:text-white'}`}>
+                <Icon name={icon} size={20} className={active ? 'text-indigo-300' : 'text-indigo-400 group-hover:text-white'}/>
+                <span className="flex-1 text-left">{label}</span>
+                {badge > 0 && <span className="bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">{badge}</span>}
+            </button>
+        );
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
