@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convivencia Escolar Pro</title>
+    
+    <!-- 1. Estilos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 100; padding: 1rem; }
+        .spinner { width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top: 4px solid #4f46e5; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+
+    <!-- 2. Librerías React y Utilidades -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+    <!-- 3. Firebase Compat (Versión Estable y Robusta) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <div id="root">
+        <div style="height:100vh; display:flex; justify-content:center; align-items:center; flex-direction:column;">
+            <div class="spinner"></div>
+            <p style="margin-top:10px; color:#64748b;">Iniciando Aplicación...</p>
+        </div>
+    </div>
+
+    <script type="text/babel">
+        // --- CONFIGURACIÓN E INICIALIZACIÓN ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCoWGztkjAUapy4BuMHRjgmUvLEyO5JI4U",
+            authDomain: "gestor-convivencia-escolar.firebaseapp.com",
+            projectId: "gestor-convivencia-escolar",
+            storageBucket: "gestor-convivencia-escolar.firebasestorage.app",
+            messagingSenderId: "864079766812",
+            appId: "1:864079766812:web:abdf1eb0da71b1a3aec6d9"
+        };
+
+        // Inicializar Firebase solo si no existe
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        // --- COMPONENTES ---
+        const { useState, useEffect, useMemo } = React;
+
+        // Icon Helper
+        const Icon = ({ name, size = 18, className = "", onClick }) => {
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
+            return <i data-lucide={name} width={size} height={size} className={className} onClick={onClick}></i>;
+        };
+
+        // PDF Helper
+        const generatePDF = (title, data, type, extraInfo = "", managerName = "Encargado de Convivencia") => {
+            if(!window.jspdf) return alert("PDF lib no cargada");
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            doc.setFillColor(67, 56, 202); doc.rect(0, 0, 210, 35, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFontSize(18); doc.text(title.toUpperCase(), 14, 22);
+            doc.setFontSize(10); doc.text(new Date().toLocaleDateString(), 180, 22);
+            doc.setTextColor(40, 40, 40);
+
+            let cursorY = 50;
+
+            if (type === 'single') {
+                const c = data;
+                doc.setFontSize(12); doc.setFont(undefined, 'bold'); doc.text("FICHA DE CASO", 14, 50);
+                doc.setFontSize(10); doc.setFont(undefined, 'normal'); cursorY = 60;
+                
+                const details = [
+                    [`Estudiante: ${c.studentName}`, `Curso: ${c.course}`],
+                    [`Fecha: ${new Date(c.date).toLocaleDateString()}`, `Riesgo: ${c.risk}`],
+                    [`Tipo: ${c.type}`, `Profesional: ${c.professional}`]
+                ];
+                details.forEach(row => { doc.text(row[0], 14, cursorY); doc.text(row[1], 110, cursorY); cursorY += 8; });
+                
+                cursorY += 5; doc.line(14, cursorY, 196, cursorY); cursorY += 10;
+                doc.setFont(undefined, 'bold'); doc.text("Descripción:", 14, cursorY); cursorY += 6;
+                doc.setFont(undefined, 'normal'); doc.text(doc.splitTextToSize(c.description || "Sin descripción", 180), 14, cursorY);
+                
+                if (c.interventions && c.interventions.length > 0) {
+                    cursorY += 40; 
+                    doc.setFont(undefined, 'bold'); doc.text("Bitácora de Intervenciones:", 14, cursorY); cursorY += 8;
+                    c.interventions.forEach(int => {
+                        doc.setFontSize(9);
+                        doc.text(`${new Date(int.date).toLocaleDateString()} - ${int.professional}`, 14, cursorY);
+                        cursorY += 5;
+                        doc.text(doc.splitTextToSize(int.content || "", 180), 14, cursorY);
+                        cursorY += 15;
+                    });
+                }
+                
+                const pageHeight = doc.internal.pageSize.height;
+                doc.line(70, pageHeight - 40, 140, pageHeight - 40);
+                doc.text(c.professional || "Profesional", 105, pageHeight - 35, null, null, "center");
+
+            } else {
+                const analysisText = generateTextAnalysis(data, type, extraInfo);
+                const splitText = doc.splitTextToSize(analysisText, 180);
+                doc.text(splitText, 14, cursorY);
+                cursorY += (splitText.length * 5) + 10;
+
+                let headers, rows;
+                if (type === 'student') {
+                    headers = [["Fecha", "Falta", "Riesgo", "Profesional", "Estado"]];
+                    rows = data.map(d => [d.date, d.type, d.risk, d.professional, d.status || 'Abierto']);
+                } else {
+                    headers = [["Fecha", "Estudiante", "Curso", "Tipo", "Riesgo", "Profesional"]];
+                    rows = data.map(d => [d.date, d.studentName, d.course, d.type, d.risk, d.professional]);
+                }
+                doc.autoTable({ head: headers, body: rows, startY: cursorY, theme: 'grid' });
+                
+                const finalY = doc.lastAutoTable.finalY + 40;
+                doc.line(70, finalY, 140, finalY);
+                doc.text(managerName, 105, finalY + 5, null, null, "center");
+            }
+            doc.save(`${title}.pdf`);
+        };
+
+        // --- Logic de Análisis de Texto para PDF ---
+        const generateTextAnalysis = (data, context, studentName = "") => {
+            if (!data || data.length === 0) return "Sin datos suficientes.";
+            const total = data.length;
+            const highRisk = data.filter(d => d.risk === 'Alto').length;
+            const highRiskPct = total > 0 ? Math.round((highRisk / total) * 100) : 0;
+            
+            const counts = (key) => data.reduce((acc, curr) => { acc[curr[key]] = (acc[curr[key]] || 0) + 1; return acc; }, {});
+            const types = Object.entries(counts('type')).sort((a,b) => b[1]-a[1]);
+            const mainType = types[0] ? types[0][0] : "varios";
+            
+            let text = "";
+            if (context === 'student') {
+                text = `INFORME ESTUDIANTE: ${studentName}\n\n`;
+                text += `A la fecha actual, el estudiante registra un historial de ${total} atenciones. `;
+                text += `Del total de casos, un ${highRiskPct}% corresponde a situaciones de Riesgo Alto. `;
+                text += `La conducta más recurrente observada es "${mainType}". `;
+                text += `Se recomienda mantener el monitoreo y seguimiento de los acuerdos establecidos en cada intervención.`;
+            } else {
+                text = `INFORME DE GESTIÓN DE CURSO\n\n`;
+                text += `El curso presenta un total de ${total} eventos registrados. `;
+                text += `El nivel de riesgo alto alcanza un ${highRiskPct}%. `;
+                text += `La principal problemática detectada es "${mainType}", lo que sugiere la necesidad de intervenciones grupales focalizadas en esta temática.`;
+            }
+            return text;
+        };
+
+        // Configuración por Defecto
+        const defaultConfig = {
+            managerName: "Encargado de Convivencia", 
+            professionals: ["Psicólogo", "Orientador", "Inspector General", "Profesor Jefe"],
+            caseTypes: ["Agresión Física", "Agresión Verbal", "Ciberacoso", "Disrupción", "Asistencia", "Vulneración Derechos", "Académico"],
+            actions: ["Entrevista Apoderado", "Mediación", "Derivación", "Suspensión", "Carta Compromiso", "Contención", "Entrevista Alumno"],
+            courses: ["1° Básico", "2° Básico", "3° Básico", "4° Básico", "5° Básico", "6° Básico", "7° Básico", "8° Básico", "1° Medio", "2° Medio", "3° Medio", "4° Medio"],
+            strategies: ["Diálogo formativo", "Cambio de puesto", "Citación Apoderado", "Refuerzo positivo", "Derivación a especialista"]
+        };
+
+        // --- COMPONENTES DE LA INTERFAZ ---
+
+        const Login = ({ onLogin }) => {
+            const [isReg, setIsReg] = useState(false);
+            const [email, setEmail] = useState('');
+            const [pass, setPass] = useState('');
+            const [error, setError] = useState('');
+
+            const handleSubmit = async () => {
+                setError('');
+                try {
+                    if (isReg) await auth.createUserWithEmailAndPassword(email, pass);
+                    else await auth.signInWithEmailAndPassword(email, pass);
+                } catch (e) {
+                    setError(e.message);
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center gradient-bg">
+                    <div className="bg-white p-8 rounded-2xl shadow-xl w-80">
+                        <h2 className="text-xl font-bold text-center mb-4 text-slate-800">Convivencia Pro</h2>
+                        <input className="w-full mb-3 p-2 border rounded" type="email" placeholder="Correo" value={email} onChange={e=>setEmail(e.target.value)} />
+                        <input className="w-full mb-4 p-2 border rounded" type="password" placeholder="Contraseña" value={pass} onChange={e=>setPass(e.target.value)} />
+                        {error && <p className="text-red-500 text-xs mb-3">{error}</p>}
+                        <button onClick={handleSubmit} className="w-full bg-indigo-600 text-white py-2 rounded font-bold">{isReg ? 'Registrar' : 'Entrar'}</button>
+                        <button onClick={()=>setIsReg(!isReg)} className="w-full text-xs text-indigo-600 mt-3 text-center block">{isReg ? 'Volver a Login' : 'Crear Cuenta'}</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const Dashboard = ({ cases, config, onEdit, onDelete, onPrint }) => {
+            const [filterDate, setFilterDate] = useState("");
+            
+            const filtered = useMemo(() => {
+                return filterDate ? cases.filter(c => new Date(c.date) >= new Date(filterDate)) : cases;
+            }, [cases, filterDate]);
+
+            const stats = useMemo(() => ({
+                total: filtered.length,
+                highRisk: filtered.filter(c => c.risk === 'Alto').length,
+                byType: filtered.reduce((acc,c)=>{acc[c.type]=(acc[c.type]||0)+1; return acc},{})
+            }), [filtered]);
+
+            useEffect(() => {
+                if(window.myChart) window.myChart.destroy();
+                const ctx = document.getElementById('chart-types');
+                if(ctx) {
+                    window.myChart = new Chart(ctx, { 
+                        type: 'bar', 
+                        data: { labels: Object.keys(stats.byType), datasets: [{ label: 'Casos', data: Object.values(stats.byType), backgroundColor: '#6366f1' }] },
+                        options: { responsive: true, maintainAspectRatio: false }
+                    });
+                }
+            }, [stats]);
+
+            return (
+                <div className="fade-in">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
+                        <input type="date" className="border p-2 rounded" onChange={e=>setFilterDate(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 mb-6">
+                        <div className="bg-white p-4 rounded shadow">Total: <span className="font-bold">{stats.total}</span></div>
+                        <div className="bg-white p-4 rounded shadow">Alto Riesgo: <span className="font-bold text-red-500">{stats.highRisk}</span></div>
+                    </div>
+                    <div className="bg-white p-4 rounded shadow mb-6 h-64"><canvas id="chart-types"></canvas></div>
+                    <div className="bg-white rounded shadow overflow-hidden">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-50 text-slate-500"><tr><th className="p-3">Fecha</th><th className="p-3">Estudiante</th><th className="p-3">Tipo</th><th className="p-3">Riesgo</th><th className="p-3"></th></tr></thead>
+                            <tbody className="divide-y">{filtered.slice(0,10).map(c=><tr key={c.id}>
+                                <td className="p-3">{c.date}</td><td className="p-3 font-bold">{c.studentName}</td><td className="p-3">{c.type}</td><td className="p-3">{c.risk}</td>
+                                <td className="p-3 flex gap-2">
+                                    <button onClick={()=>onEdit(c)} className="text-indigo-600"><Icon name="edit-2" size={16}/></button>
+                                    <button onClick={()=>onPrint("Ficha", c, 'single')} className="text-slate-500"><Icon name="file-text" size={16}/></button>
+                                    <button onClick={()=>onDelete(c.id)} className="text-red-500"><Icon name="trash-2" size={16}/></button>
+                                </td>
+                            </tr>)}</tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
+        const CaseForm = ({ config, initialData, onSave, onCancel, isReferral }) => {
+            const [d, setD] = useState(initialData || { studentName: '', course: config.courses[0], date: new Date().toISOString().split('T')[0], risk: 'Bajo', description: '', actions: [], interventions: [] });
+            const [newInt, setNewInt] = useState({date: new Date().toISOString().split('T')[0], content: ''});
+            const [tab, setTab] = useState('general');
+
+            const addInt = () => { if(newInt.content) { setD({...d, interventions: [...(d.interventions||[]), newInt]}); setNewInt({...newInt, content:''}); } };
+
+            // Asegurar que interventions existe
+            useEffect(() => {
+                if (!d.interventions) setD(prev => ({...prev, interventions: []}));
+            }, []);
+
+            return (
+                <div className="max-w-4xl mx-auto bg-white p-8 rounded shadow fade-in">
+                    <div className="flex justify-between mb-4"><h2 className="text-xl font-bold">{initialData ? 'Editar Caso' : 'Nuevo Caso'}</h2><button onClick={onCancel}>Cancelar</button></div>
+                    
+                    {!isReferral && (
+                        <div className="flex border-b mb-4">
+                            <button onClick={()=>setTab('general')} className={`mr-4 pb-2 ${tab==='general'?'border-b-2 border-indigo-600 font-bold':''}`}>General</button>
+                            <button onClick={()=>setTab('bitacora')} className={`pb-2 ${tab==='bitacora'?'border-b-2 border-indigo-600 font-bold':''}`}>Bitácora</button>
+                        </div>
+                    )}
+
+                    {tab === 'general' ? (
+                        <>
+                            <div className="grid md:grid-cols-2 gap-4 mb-4">
+                                <input className="border p-2 rounded" placeholder="Estudiante" value={d.studentName} onChange={e=>setD({...d, studentName:e.target.value})} />
+                                <select className="border p-2 rounded" value={d.course} onChange={e=>setD({...d, course:e.target.value})}>{config.courses.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                <select className="border p-2 rounded" value={d.type} onChange={e=>setD({...d, type:e.target.value})}>{(config.caseTypes||[]).map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                <select className="border p-2 rounded" value={d.risk} onChange={e=>setD({...d, risk:e.target.value})}><option>Bajo</option><option>Medio</option><option>Alto</option></select>
+                            </div>
+                            <textarea className="w-full border p-2 rounded mb-4" rows="3" placeholder="Descripción" value={d.description} onChange={e=>setD({...d, description:e.target.value})} />
+                        </>
+                    ) : (
+                        <div className="mb-4 bg-slate-50 p-4 rounded border">
+                            <h3 className="font-bold text-sm mb-2">Bitácora de Intervenciones</h3>
+                            <div className="flex gap-2 mb-2"><input type="date" className="border p-1 rounded" value={newInt.date} onChange={e=>setNewInt({...newInt, date:e.target.value})} /><input className="border p-1 rounded flex-1" placeholder="Observación" value={newInt.content} onChange={e=>setNewInt({...newInt, content:e.target.value})} /><button onClick={addInt} className="bg-indigo-600 text-white px-3 rounded">+</button></div>
+                            <div className="space-y-2 max-h-40 overflow-y-auto">{(d.interventions||[]).map((int,i)=><div key={i} className="text-sm border-l-2 border-indigo-400 pl-2"><b>{int.date}:</b> {int.content}</div>)}</div>
+                        </div>
+                    )}
+
+                    <div className="flex justify-end gap-2">
+                        <button onClick={()=>onSave(d)} className="bg-indigo-600 text-white px-4 py-2 rounded">Guardar</button>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MY REFERRALS LIST (FOR TEACHERS) ---
+        const MyReferralsList = ({ items }) => {
+            const [selected, setSelected] = useState(null);
+            
+            return (
+                <div className="fade-in">
+                    <h2 className="text-2xl font-bold mb-4">Mis Derivaciones</h2>
+                    <div className="bg-white rounded shadow overflow-hidden">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-50 text-slate-500"><tr><th className="p-3">Fecha</th><th className="p-3">Estudiante</th><th className="p-3">Estado</th><th className="p-3">Acción</th></tr></thead>
+                            <tbody className="divide-y">{items.map(r=><tr key={r.id}>
+                                <td className="p-3">{new Date(r.date).toLocaleDateString()}</td>
+                                <td className="p-3">{r.studentName}</td>
+                                <td className="p-3"><span className={`px-2 py-1 rounded text-xs ${r.status==='Pendiente'?'bg-yellow-100':'bg-green-100'}`}>{r.status||'Pendiente'}</span></td>
+                                <td className="p-3">
+                                    {r.status !== 'Pendiente' && <button onClick={()=>setSelected(r)} className="text-indigo-600 flex items-center gap-1"><Icon name="eye" size={14}/> Ver Avance</button>}
+                                </td>
+                            </tr>)}</tbody>
+                        </table>
+                    </div>
+
+                    {selected && (
+                        <div className="modal-overlay" onClick={()=>setSelected(null)}>
+                            <div className="bg-white p-6 rounded-xl max-w-lg w-full" onClick={e=>e.stopPropagation()}>
+                                <h3 className="font-bold text-lg mb-4">Historial: {selected.studentName}</h3>
+                                <div className="space-y-3 max-h-60 overflow-y-auto">
+                                    <div className="bg-slate-50 p-2 rounded text-sm">Estado actual: {selected.status}</div>
+                                    {selected.interventions && selected.interventions.map((int, i) => (
+                                        <div key={i} className="border-l-2 border-indigo-300 pl-2 text-sm">
+                                            <span className="text-xs text-gray-500">{new Date(int.date).toLocaleDateString()}</span>
+                                            <p>{int.content}</p>
+                                        </div>
+                                    ))}
+                                    {(!selected.interventions || selected.interventions.length === 0) && <p className="text-sm text-gray-400">Sin intervenciones registradas aún.</p>}
+                                </div>
+                                <button onClick={()=>setSelected(null)} className="mt-4 w-full border p-2 rounded">Cerrar</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // --- OTHER COMPONENTS ---
+        const ConfigView = ({ config, users, onUpdateConf, onUpdateRole }) => (<div className="fade-in"><h2 className="text-2xl font-bold mb-4">Configuración</h2><div className="bg-white p-6 rounded shadow mb-6"><h3 className="font-bold mb-2">Usuarios</h3>{users.map(u=><div key={u.id} className="flex justify-between py-2 border-b"><span>{u.id}</span><button onClick={()=>onUpdateRole(u.id, u.role==='admin'?'docente':'admin')} className="text-indigo-600">{u.role}</button></div>)}</div><div className="bg-white p-6 rounded shadow"><h3 className="font-bold mb-2">Datos</h3><input className="border p-2 rounded w-full" value={config.managerName} onChange={e=>onUpdateConf({...config, managerName:e.target.value})} /></div></div>);
+        const StudentList = ({ cases, onSelect }) => { const list=[...new Set(cases.map(c=>c.studentName))]; return <div className="fade-in"><h2 className="text-2xl font-bold mb-4">Alumnos</h2><div className="bg-white rounded shadow overflow-hidden"><table className="w-full text-left text-sm"><thead className="bg-slate-50"><tr><th className="p-3">Nombre</th><th className="p-3"></th></tr></thead><tbody>{list.map(s=><tr key={s} className="border-t"><td className="p-3">{s}</td><td className="p-3"><button onClick={()=>onSelect(s)} className="text-indigo-600">Ver Ficha</button></td></tr>)}</tbody></table></div></div>; };
+        const StudentProfile = ({ studentName, cases, onBack, config, onEdit }) => { const hist=cases.filter(c=>c.studentName===studentName); return <div className="fade-in pb-20"><button onClick={onBack} className="mb-4">Volver</button><div className="bg-white p-8 rounded shadow"><h1 className="text-3xl font-bold mb-6">{studentName}</h1><button onClick={()=>generatePDF("Informe Estudiante", hist, 'student', studentName, config.managerName)} className="bg-indigo-600 text-white px-4 py-2 rounded mb-4">Descargar Informe PDF</button>{hist.map(h=><div key={h.id} className="border-b py-4"><div>{h.date} - {h.type}</div></div>)}</div></div>; };
+        const ReportsView = ({ cases, config }) => <div className="fade-in"><h2 className="text-2xl font-bold mb-4">Reportes</h2><div className="bg-white p-6 rounded shadow"><p>Seleccione un curso para generar informe PDF.</p></div></div>; 
+        const Inbox = ({ referrals, onProcess, onDelete }) => <div className="fade-in"><h2 className="text-2xl font-bold mb-4">Bandeja</h2>{referrals.map(r=><div key={r.id} className="bg-white p-4 mb-4 rounded shadow"><h3 className="font-bold">{r.studentName}</h3><p>{r.description}</p><button onClick={()=>onProcess(r)} className="bg-indigo-600 text-white px-3 py-1 rounded mt-2 text-sm">Gestionar</button></div>)}</div>;
+        const ReferralForm = ({ config, onSave }) => {
+            const [d, setD] = useState({ studentName: '', course: config.courses[0], date: new Date().toISOString().split('T')[0], cause: '', description: '' });
+            return <div className="bg-white p-6 rounded shadow"><h2 className="font-bold mb-4">Derivación</h2><input className="border p-2 w-full mb-2" placeholder="Estudiante" value={d.studentName} onChange={e=>setD({...d, studentName:e.target.value})} /><button onClick={()=>onSave(d)} className="bg-indigo-600 text-white px-4 py-2 rounded">Enviar</button></div>;
+        };
+
+        // --- APP PRINCIPAL ---
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [role, setRole] = useState('docente');
+            const [view, setView] = useState('dashboard');
+            const [data, setData] = useState({ cases: [], referrals: [], users: [] });
+            const [config, setConfig] = useState(defaultConfig);
+            const [editing, setEditing] = useState(null);
+            const [selectedStudent, setSelectedStudent] = useState(null);
+
+            useEffect(() => {
+                return auth.onAuthStateChanged(async (u) => {
+                    setUser(u);
+                    if (u) {
+                        const userDoc = await db.collection('users').doc(u.email).get();
+                        if (userDoc.exists) setRole(userDoc.data().role);
+                        else {
+                            const anyUser = await db.collection('users').get();
+                            const newRole = anyUser.empty ? 'admin' : 'docente';
+                            await db.collection('users').doc(u.email).set({ role: newRole });
+                            setRole(newRole);
+                        }
+                        
+                        db.collection('cases').onSnapshot(snap => {
+                            const all = snap.docs.map(d => ({id:d.id, ...d.data()}));
+                            setData(prev => ({
+                                ...prev,
+                                cases: all.filter(c => !c.isReferral),
+                                referrals: all.filter(c => c.isReferral && c.status === 'Pendiente'),
+                                all: all
+                            }));
+                        });
+
+                        db.collection('config').doc('main').onSnapshot(snap => {
+                            if(snap.exists) setConfig({ ...defaultConfig, ...snap.data() });
+                        });
+                        
+                        db.collection('users').onSnapshot(snap => {
+                             setData(prev => ({ ...prev, users: snap.docs.map(d => ({id:d.id, ...d.data()})) }));
+                        });
+                    }
+                });
+            }, []);
+
+            const saveCase = async (d) => {
+                const finalData = { ...d, updatedBy: user.email, updatedAt: new Date().toISOString() };
+                if (!d.createdAt) { finalData.createdAt = new Date().toISOString(); finalData.createdBy = user.email; }
+                
+                if (editing && editing.id) await db.collection('cases').doc(editing.id).update(finalData);
+                else await db.collection('cases').add(finalData);
+                
+                setEditing(null);
+                setView(role === 'admin' ? 'dashboard' : 'my_referrals');
+            };
+
+            const deleteItem = async (id) => { if(confirm("¿Borrar?")) await db.collection('cases').doc(id).delete(); };
+            const updateRole = async (email, r) => await db.collection('users').doc(email).update({role: r});
+            const updateConf = async (c) => await db.collection('config').doc('main').set(c, {merge:true});
+
+            if (!user) return <Login onLogin={(e,p,r) => r ? auth.createUserWithEmailAndPassword(e,p) : auth.signInWithEmailAndPassword(e,p)} />;
+
+            const isAdmin = role === 'admin';
+
+            return (
+                <div className="flex h-screen text-slate-800">
+                    <aside className="w-64 bg-slate-900 text-white flex-col hidden md:flex">
+                        <div className="p-6 border-b border-slate-700">
+                            <h2 className="font-bold text-indigo-400">Convivencia Pro</h2>
+                            <p className="text-xs text-slate-400 mt-1">{user.email}</p>
+                            <span className="text-[10px] bg-slate-700 px-2 rounded inline-block mt-2">{role.toUpperCase()}</span>
+                        </div>
+                        <nav className="flex-1 p-4 space-y-1">
+                            {isAdmin ? (
+                                <>
+                                    <button onClick={()=>setView('dashboard')} className={`w-full text-left p-2 rounded ${view==='dashboard'?'bg-indigo-600':''}`}>Dashboard</button>
+                                    <button onClick={()=>setView('inbox')} className={`w-full text-left p-2 rounded ${view==='inbox'?'bg-indigo-600':''}`}>Bandeja ({data.referrals.length})</button>
+                                    <button onClick={()=>{setEditing(null); setView('register');}} className={`w-full text-left p-2 rounded ${view==='register'?'bg-indigo-600':''}`}>Nuevo Caso</button>
+                                    <button onClick={()=>{setSelectedStudent(null); setView('students');}} className={`w-full text-left p-2 rounded ${view==='students'?'bg-indigo-600':''}`}>Estudiantes</button>
+                                    <button onClick={()=>setView('config')} className={`w-full text-left p-2 rounded ${view==='config'?'bg-indigo-600':''}`}>Configuración</button>
+                                </>
+                            ) : (
+                                <>
+                                    <button onClick={()=>{setEditing(null); setView('referral');}} className={`w-full text-left p-2 rounded ${view==='referral'?'bg-indigo-600':''}`}>Nueva Derivación</button>
+                                    <button onClick={()=>setView('my_referrals')} className={`w-full text-left p-2 rounded ${view==='my_referrals'?'bg-indigo-600':''}`}>Mis Derivaciones</button>
+                                </>
+                            )}
+                        </nav>
+                        <button onClick={()=>auth.signOut()} className="p-4 border-t border-slate-700 hover:bg-slate-800">Cerrar Sesión</button>
+                    </aside>
+                    
+                    <main className="flex-1 overflow-y-auto p-8">
+                        {isAdmin && view === 'dashboard' && <Dashboard cases={data.cases} config={config} onEdit={c=>{setEditing(c); setView('register');}} onDelete={deleteItem} onPrint={(t,d,ty)=>generatePDF(t,d,ty,'',config.managerName)} />}
+                        
+                        {isAdmin && view === 'inbox' && <Inbox referrals={data.referrals} onProcess={r=>{setEditing({...r, isReferral:false, status:'Abierto'}); setView('register');}} onDelete={deleteItem} />}
+
+                        {(view === 'register' || view === 'referral') && (
+                            <CaseForm 
+                                config={config} 
+                                initialData={editing} 
+                                isReferral={!isAdmin} 
+                                onSave={(d) => saveCase(isAdmin ? d : {...d, isReferral: true, status: 'Pendiente'})}
+                                onCancel={()=>setView(isAdmin ? 'dashboard' : 'my_referrals')} 
+                            />
+                        )}
+
+                        {isAdmin && view === 'students' && !selectedStudent && <StudentList cases={data.cases} onSelect={s=>{setSelectedStudent(s);}} />}
+                        {isAdmin && view === 'students' && selectedStudent && <StudentProfile studentName={selectedStudent} cases={data.cases} onBack={()=>setSelectedStudent(null)} config={config} onEdit={c=>{setEditing(c); setView('register');}} />}
+
+                        {isAdmin && view === 'config' && <ConfigView config={config} users={data.users} onUpdateConf={updateConf} onUpdateRole={updateRole} />}
+
+                        {!isAdmin && view === 'my_referrals' && <MyReferralsList items={(data.all||[]).filter(x => x.createdBy === user.email)} />}
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
