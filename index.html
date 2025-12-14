@@ -162,7 +162,7 @@
 
         const LoginScreen = ({ onAuth, error, loading }) => {
             const [isReg, setIsReg] = useState(false);
-            const [creds, setCreds] = useState({e:'', p:''});
+            const [creds, setCreds] = useState({e:'', p:'', name:'', jobTitle:''});
             return (
                 <div className="min-h-screen flex items-center justify-center bg-slate-50 relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 z-0"></div>
@@ -176,14 +176,14 @@
                             <p className="text-sm text-slate-500 mt-1">Gestión Escolar Inteligente</p>
                         </div>
                         <div className="space-y-4">
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Correo</label>
-                                <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" type="email" placeholder="usuario@colegio.cl" value={creds.e} onChange={e=>setCreds({...creds, e:e.target.value})} />
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Contraseña</label>
-                                <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" type="password" placeholder="••••••••" value={creds.p} onChange={e=>setCreds({...creds, p:e.target.value})} />
-                            </div>
+                            {isReg && (
+                                <>
+                                    <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" type="text" placeholder="Nombre Completo" value={creds.name} onChange={e=>setCreds({...creds, name:e.target.value})} />
+                                    <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" type="text" placeholder="Cargo" value={creds.jobTitle} onChange={e=>setCreds({...creds, jobTitle:e.target.value})} />
+                                </>
+                            )}
+                            <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" type="email" placeholder="Correo electrónico" value={creds.e} onChange={e=>setCreds({...creds, e:e.target.value})} />
+                            <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" type="password" placeholder="Contraseña" value={creds.p} onChange={e=>setCreds({...creds, p:e.target.value})} />
                         </div>
                         {error && <div className="bg-red-50 text-red-600 text-xs p-3 rounded-lg mt-4 text-center border border-red-100 flex items-center justify-center gap-2"><Icon name="alert-circle" size={14}/> {error}</div>}
                         <button onClick={()=>onAuth(creds.e, creds.p, isReg)} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-bold mt-6 shadow-lg shadow-indigo-200 transition-all transform hover:-translate-y-0.5">
@@ -416,7 +416,14 @@
             );
         };
 
-        const ConfigView = ({ config, users, onUpdateConf, onUpdateRole }) => (
+        const ConfigView = ({ config, users, onUpdateConf, onUpdateRole }) => {
+            const Section = ({ k, title, icon }) => {
+                const [v, setV] = useState('');
+                const currentList = config[k] || [];
+                const add = () => { if(v && !currentList.includes(v)){onUpdateConf({...config, [k]:[...currentList, v]}); setV('');}};
+                return <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm"><h3 className="font-bold mb-4 flex items-center gap-2"><Icon name={icon} className="text-indigo-600"/> {title}</h3><div className="flex gap-2 mb-4"><input className="flex-1 border p-2 rounded-lg bg-slate-50 outline-none focus:border-indigo-500" placeholder="Añadir nuevo..." value={v} onChange={e=>setV(e.target.value)} /><button onClick={add} className="bg-indigo-600 text-white p-2 rounded-lg"><Icon name="plus"/></button></div><div className="flex flex-wrap gap-2">{currentList.map(x=><span key={x} className="bg-slate-100 px-3 py-1 rounded-full text-xs text-slate-600 cursor-pointer hover:bg-rose-100 hover:text-rose-600 transition-colors" onClick={()=>onUpdateConf({...config, [k]:currentList.filter(i=>i!==x)})}>{x} ×</span>)}</div></div>
+            };
+            return (
             <div className="fade-in max-w-4xl mx-auto space-y-8 pb-20">
                 <h2 className="text-2xl font-bold text-slate-800">Configuración</h2>
                 
@@ -427,9 +434,9 @@
                             <thead className="bg-slate-50 text-slate-500 font-bold"><tr><th className="p-4">Usuario</th><th className="p-4">Rol Actual</th><th className="p-4 text-right">Acción</th></tr></thead>
                             <tbody className="divide-y divide-slate-100">{users.map(u => <tr key={u.id}>
                                 <td className="p-4 font-medium">{u.id}</td>
-                                <td className="p-4"><span className={`px-2 py-1 rounded-full text-xs font-bold ${u.role==='admin'?'bg-indigo-100 text-indigo-700':'bg-emerald-100 text-emerald-700'}`}>{u.role==='admin'?'Equipo Convivencia':'Docente'}</span></td>
+                                <td className="p-4"><span className={`px-2 py-1 rounded-full text-xs font-bold ${u.role==='admin'?'bg-indigo-100 text-indigo-700':'bg-emerald-100 text-emerald-700'}`}>{u.role==='admin'?'Equipo Convivencia':'Funcionario'}</span></td>
                                 <td className="p-4 text-right">
-                                    <button onClick={()=>onUpdateRole(u.id, u.role==='admin'?'docente':'admin')} className="text-indigo-600 hover:underline font-medium text-xs">Cambiar Rol</button>
+                                    <button onClick={()=>onUpdateRole(u.id, u.role==='admin'?'funcionario':'admin')} className="text-indigo-600 hover:underline font-medium text-xs">Cambiar Rol</button>
                                 </td>
                             </tr>)}</tbody>
                         </table>
@@ -444,13 +451,22 @@
                         <button className="bg-indigo-600 text-white px-6 rounded-xl font-bold hover:bg-indigo-700 transition" onClick={()=>onUpdateConf(config)}>Guardar</button>
                     </div>
                 </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                    <Section k="professionals" title="Profesionales" icon="briefcase"/>
+                    <Section k="caseTypes" title="Tipos de Faltas" icon="alert-octagon"/>
+                    <Section k="actions" title="Acciones y Protocolos" icon="clipboard-list"/>
+                    <Section k="courses" title="Cursos y Niveles" icon="graduation-cap"/>
+                    <Section k="strategies" title="Estrategias Funcionarios" icon="lightbulb"/>
+                </div>
             </div>
-        );
+            );
+        };
 
         // --- Logic & Init ---
         const App = () => {
             const [user, setUser] = useState(null);
-            const [role, setRole] = useState('docente');
+            const [role, setRole] = useState('funcionario');
             const [view, setView] = useState('dashboard');
             const [data, setData] = useState({ cases: [], referrals: [], users: [], allRaw: [] });
             const [config, setConfig] = useState(defaultConfig);
@@ -466,7 +482,7 @@
                         if(uDoc.exists) setRole(uDoc.data().role);
                         else {
                             const snap = await db.collection('users').get();
-                            const r = snap.empty ? 'admin' : 'docente';
+                            const r = snap.empty ? 'admin' : 'funcionario';
                             await db.collection('users').doc(u.email).set({role:r});
                             setRole(r);
                         }
@@ -488,9 +504,33 @@
 
             const notify = (msg, type='success') => { setNotif({msg,type}); setTimeout(()=>setNotif(null), 3000); };
             
+            const handleAuth = async (data, isReg) => {
+                setLoading(true);
+                try {
+                    if (isReg) {
+                        const { user: newUser } = await auth.createUserWithEmailAndPassword(data.email, data.pass);
+                        const usersSnap = await db.collection('users').get();
+                        const newRole = usersSnap.empty ? 'admin' : 'funcionario';
+                        await db.collection('users').doc(newUser.email).set({
+                            email: data.email,
+                            name: data.name,
+                            jobTitle: data.jobTitle,
+                            role: newRole
+                        });
+                        alert("Registro exitoso. Bienvenido " + data.name);
+                    } else {
+                        await auth.signInWithEmailAndPassword(data.email, data.pass);
+                    }
+                } catch (err) { alert(err.message); setLoading(false); }
+            };
+
             const handleSave = async (d) => {
                 const final = { ...d, updatedBy: user.email, updatedAt: new Date().toISOString() };
-                if (!d.createdAt) { final.createdAt = new Date().toISOString(); final.createdBy = user.email; }
+                if (!d.createdAt) { 
+                    final.createdAt = new Date().toISOString(); 
+                    final.createdBy = user.email; 
+                    // final.senderName handled in sub-components logic if needed
+                }
                 try {
                     if(editing && editing.id) await db.collection('cases').doc(editing.id).update(final);
                     else await db.collection('cases').add(final);
@@ -505,26 +545,7 @@
             const handleUpdateConf = async (c) => { await db.collection('config').doc('main').set(c, {merge:true}); notify("Configuración guardada"); };
 
             if(loading) return <div className="loader-container"><div className="spinner"></div></div>;
-            if(!user) return (
-                <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
-                    <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm glass-panel text-center">
-                        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-indigo-300"><Icon name="shield-check" size={32}/></div>
-                        <h1 className="text-2xl font-bold text-slate-800 mb-2">Bienvenido</h1>
-                        <p className="text-slate-500 mb-8 text-sm">Plataforma de Gestión de Convivencia</p>
-                        <form onSubmit={async (e) => {
-                            e.preventDefault();
-                            const email = e.target.email.value;
-                            const pass = e.target.pass.value;
-                            try { await auth.signInWithEmailAndPassword(email, pass); } 
-                            catch(err) { if(err.code === 'auth/user-not-found') { await auth.createUserWithEmailAndPassword(email, pass); } else alert(err.message); }
-                        }}>
-                            <input name="email" className="w-full p-4 mb-3 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Correo electrónico" type="email" required />
-                            <input name="pass" className="w-full p-4 mb-6 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Contraseña" type="password" required />
-                            <button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all transform active:scale-95">Ingresar / Registrar</button>
-                        </form>
-                    </div>
-                </div>
-            );
+            if(!user) return <LoginScreen onAuth={handleAuth} loading={loading} />;
 
             const isAdmin = role === 'admin';
 
@@ -534,7 +555,7 @@
                         <div className="p-8 border-b border-white/10">
                             <h2 className="font-bold text-xl tracking-tight flex items-center gap-2"><Icon name="shield"/> Convivencia</h2>
                             <p className="text-xs mt-2 text-indigo-200 truncate">{user.email}</p>
-                            <span className="text-[10px] uppercase bg-white/10 px-3 py-1 rounded-full mt-3 inline-block font-bold tracking-wider">{isAdmin?'Equipo Directivo':'Docente'}</span>
+                            <span className="text-[10px] uppercase bg-white/10 px-3 py-1 rounded-full mt-3 inline-block font-bold tracking-wider">{isAdmin?'Equipo Directivo':'Funcionario'}</span>
                         </div>
                         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
                             {isAdmin ? (
@@ -573,7 +594,7 @@
                                         {data.referrals.length===0 && <div className="text-center p-12 text-slate-400 bg-white rounded-2xl border border-dashed border-slate-300">No hay derivaciones pendientes</div>}
                                         {data.referrals.map(r=><div key={r.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:border-indigo-300 transition-all group">
                                             <div className="flex justify-between mb-2">
-                                                <div><span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-full uppercase tracking-wide">Pendiente</span><h3 className="font-bold text-lg mt-1">{r.studentName}</h3><p className="text-xs text-slate-400">Enviado por: {r.createdBy}</p></div>
+                                                <div><span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-full uppercase tracking-wide">Pendiente</span><h3 className="font-bold text-lg mt-1">{r.studentName}</h3><p className="text-xs text-slate-400">Enviado por: {r.senderName || r.createdBy}</p></div>
                                                 <div className="flex gap-2 opacity-50 group-hover:opacity-100 transition-opacity"><button onClick={()=>generatePDF("Ficha Derivacion", r, 'referral_single')} className="p-2 bg-slate-50 rounded-lg hover:bg-indigo-50 hover:text-indigo-600"><Icon name="printer"/></button><button onClick={()=>handleDelete(r.id)} className="p-2 bg-slate-50 rounded-lg hover:bg-rose-50 hover:text-rose-600"><Icon name="trash-2"/></button></div>
                                             </div>
                                             <p className="text-sm text-slate-600 mb-4 bg-slate-50 p-3 rounded-lg">{r.description}</p>
@@ -583,7 +604,7 @@
                                 </div>
                             )}
                             
-                            {(view==='register' || view==='referral') && <CaseForm config={config} initialData={editing} isReferral={!isAdmin} onSave={d=>saveCase(isAdmin?d:{...d, isReferral:true, status:'Pendiente'})} onCancel={()=>setView(isAdmin?'dashboard':'my_referrals')} />}
+                            {(view==='register' || view==='referral') && <CaseForm config={config} initialData={editing} isReferral={!isAdmin} onSave={d=>handleSave(isAdmin?d:{...d, isReferral:true, status:'Pendiente'})} onCancel={()=>setView(isAdmin?'dashboard':'my_referrals')} />}
                             
                             {isAdmin && view==='students' && !selectedStudent && <div className="fade-in"><h2 className="text-2xl font-bold mb-6">Directorio</h2><div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-xs"><tr><th className="p-4">Estudiante</th><th className="p-4">Curso</th><th className="p-4">N° Casos</th><th className="p-4"></th></tr></thead><tbody className="divide-y divide-slate-100">{Object.values(data.cases.reduce((acc,c)=>{if(!acc[c.studentName])acc[c.studentName]={name:c.studentName,course:c.course,count:0};acc[c.studentName].count++;return acc},{})).map(s=><tr key={s.name} className="hover:bg-slate-50"><td className="p-4 font-bold text-slate-700">{s.name}</td><td className="p-4">{s.course}</td><td className="p-4"><span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md font-bold">{s.count}</span></td><td className="p-4 text-right"><button onClick={()=>setSelectedStudent(s.name)} className="text-indigo-600 hover:text-indigo-800 font-medium text-xs border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-50">Ver Perfil</button></td></tr>)}</tbody></table></div></div>}
                             
@@ -605,17 +626,7 @@
                                 </div>
                             )}
 
-                            {!isAdmin && view==='my_referrals' && (
-                                <div className="fade-in">
-                                    <h2 className="text-2xl font-bold mb-6">Historial de Envíos</h2>
-                                    <div className="grid gap-4">
-                                        {data.allRaw.filter(x=>x.createdBy===user.email).map(r=><div key={r.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center">
-                                            <div><h4 className="font-bold text-slate-800">{r.studentName}</h4><p className="text-xs text-slate-500">{new Date(r.date).toLocaleDateString()} • {r.type || 'Derivación'}</p></div>
-                                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${r.status==='Pendiente'?'bg-amber-100 text-amber-700':r.status==='En Gestión'?'bg-indigo-100 text-indigo-700':'bg-emerald-100 text-emerald-700'}`}>{r.status||'Pendiente'}</span>
-                                        </div>)}
-                                    </div>
-                                </div>
-                            )}
+                            {!isAdmin && view==='my_referrals' && <MyReferralsList items={(data.allRaw||[]).filter(x => x.createdBy === user.email)} />}
                         </div>
                     </main>
                 </div>
