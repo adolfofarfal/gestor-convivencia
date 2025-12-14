@@ -179,11 +179,11 @@
                             {isReg && (
                                 <>
                                     <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" type="text" placeholder="Nombre Completo" value={creds.name} onChange={e=>setCreds({...creds, name:e.target.value})} />
-                                    <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" type="text" placeholder="Cargo" value={creds.jobTitle} onChange={e=>setCreds({...creds, jobTitle:e.target.value})} />
+                                    <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white outline-none" type="text" placeholder="Cargo (Ej. Profesor Jefe)" value={creds.jobTitle} onChange={e=>setCreds({...creds, jobTitle:e.target.value})} />
                                 </>
                             )}
-                            <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" type="email" placeholder="Correo electrónico" value={creds.e} onChange={e=>setCreds({...creds, e:e.target.value})} />
-                            <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" type="password" placeholder="Contraseña" value={creds.p} onChange={e=>setCreds({...creds, p:e.target.value})} />
+                            <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white outline-none" type="email" placeholder="Correo electrónico" value={creds.e} onChange={e=>setCreds({...creds, e:e.target.value})} />
+                            <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white outline-none" type="password" placeholder="Contraseña" value={creds.p} onChange={e=>setCreds({...creds, p:e.target.value})} />
                         </div>
                         {error && <div className="bg-red-50 text-red-600 text-xs p-3 rounded-lg mt-4 text-center border border-red-100 flex items-center justify-center gap-2"><Icon name="alert-circle" size={14}/> {error}</div>}
                         <button onClick={()=>onAuth(creds.e, creds.p, isReg)} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-bold mt-6 shadow-lg shadow-indigo-200 transition-all transform hover:-translate-y-0.5">
@@ -295,12 +295,15 @@
             );
         };
 
-        const CaseForm = ({ config, initialData, onSave, onCancel, isReferral }) => {
+        const CaseForm = ({ config, initialData, onSave, onCancel, isReferral, userProfile }) => {
             const [d, setD] = useState(() => {
                 const base = initialData || { 
                     studentName: '', course: config.courses[0], date: new Date().toISOString().split('T')[0], 
                     risk: 'Bajo', description: '', actions: [], interventions: [], 
-                    professional: config.professionals[0], type: config.caseTypes[0]
+                    professional: config.professionals[0], type: config.caseTypes[0],
+                    // Auto-fill for new referrals
+                    senderName: userProfile ? userProfile.name : '',
+                    senderJob: userProfile ? userProfile.jobTitle : ''
                 };
                 return { 
                     ...base, 
@@ -318,7 +321,7 @@
                 <div className="max-w-4xl mx-auto pb-20 fade-in">
                     <div className="flex justify-between items-center mb-6">
                         <div>
-                            <h2 className="text-2xl font-bold text-slate-800">{isReferral ? "Nueva Derivación" : (initialData ? "Editar Caso" : "Nuevo Caso")}</h2>
+                            <h2 className="text-2xl font-bold text-slate-800">{isReferral ? "Nueva Derivación" : "Gestionar Caso"}</h2>
                             <p className="text-slate-500 text-sm">Complete la información requerida</p>
                         </div>
                         <button onClick={onCancel} className="text-slate-500 hover:text-slate-800 font-medium px-4 py-2 hover:bg-white hover:shadow-sm rounded-lg transition-all">Cancelar</button>
@@ -335,6 +338,13 @@
                         <div className="p-8">
                             {tab === 'general' || isReferral ? (
                                 <div className="space-y-6">
+                                    {isReferral && (
+                                        <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-4">
+                                            <p className="text-xs font-bold text-indigo-400 uppercase">Solicitante (Automático)</p>
+                                            <p className="font-bold text-indigo-900">{userProfile?.name} <span className="font-normal opacity-70">- {userProfile?.jobTitle}</span></p>
+                                        </div>
+                                    )}
+
                                     <div className="grid md:grid-cols-2 gap-6">
                                         <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Estudiante</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" value={d.studentName} onChange={e=>setD({...d, studentName:e.target.value})} placeholder="Nombre completo" /></div>
                                         <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Curso</label><select className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={d.course} onChange={e=>setD({...d, course:e.target.value})}>{config.courses.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
@@ -466,6 +476,7 @@
         // --- Logic & Init ---
         const App = () => {
             const [user, setUser] = useState(null);
+            const [userProfile, setUserProfile] = useState(null); // Stores name/role
             const [role, setRole] = useState('funcionario');
             const [view, setView] = useState('dashboard');
             const [data, setData] = useState({ cases: [], referrals: [], users: [], allRaw: [] });
@@ -473,20 +484,30 @@
             const [notif, setNotif] = useState(null);
             const [editing, setEditing] = useState(null);
             const [loading, setLoading] = useState(true);
+            const [viewingRef, setViewingRef] = useState(null);
 
             useEffect(() => {
                 auth.onAuthStateChanged(async (u) => {
                     if (u) {
                         setUser(u);
+                        // Fetch extended profile
                         const uDoc = await db.collection('users').doc(u.email).get();
-                        if(uDoc.exists) setRole(uDoc.data().role);
-                        else {
+                        let currentRole = 'funcionario';
+                        if (uDoc.exists) {
+                            const d = uDoc.data();
+                            currentRole = d.role;
+                            setUserProfile(d);
+                        } else {
+                            // First user logic
                             const snap = await db.collection('users').get();
-                            const r = snap.empty ? 'admin' : 'funcionario';
-                            await db.collection('users').doc(u.email).set({role:r});
-                            setRole(r);
+                            currentRole = snap.empty ? 'admin' : 'funcionario';
+                            const newProfile = { email: u.email, role: currentRole, name: 'Usuario', jobTitle: 'Funcionario' };
+                            await db.collection('users').doc(u.email).set(newProfile);
+                            setUserProfile(newProfile);
                         }
+                        setRole(currentRole);
 
+                        // Listeners
                         db.collection('cases').onSnapshot(s => {
                             const all = s.docs.map(d => ({id:d.id, ...d.data()})).sort((a,b) => new Date(b.date)-new Date(a.date));
                             setData({ allRaw: all, cases: all.filter(x=>!x.isReferral), referrals: all.filter(x=>x.isReferral && x.status==='Pendiente'), users: data.users });
@@ -495,6 +516,7 @@
                         db.collection('users').onSnapshot(s => setData(prev => ({...prev, users: s.docs.map(d => ({id:d.id, ...d.data()}))})));
                         
                         setLoading(false);
+                        setView(currentRole === 'admin' ? 'dashboard' : 'my_referrals');
                     } else {
                         setUser(null);
                         setLoading(false);
@@ -509,6 +531,7 @@
                 try {
                     if (isReg) {
                         const { user: newUser } = await auth.createUserWithEmailAndPassword(data.email, data.pass);
+                        // Create profile
                         const usersSnap = await db.collection('users').get();
                         const newRole = usersSnap.empty ? 'admin' : 'funcionario';
                         await db.collection('users').doc(newUser.email).set({
@@ -517,7 +540,7 @@
                             jobTitle: data.jobTitle,
                             role: newRole
                         });
-                        alert("Registro exitoso. Bienvenido " + data.name);
+                        return true;
                     } else {
                         await auth.signInWithEmailAndPassword(data.email, data.pass);
                     }
@@ -529,7 +552,7 @@
                 if (!d.createdAt) { 
                     final.createdAt = new Date().toISOString(); 
                     final.createdBy = user.email; 
-                    // final.senderName handled in sub-components logic if needed
+                    final.senderName = userProfile ? userProfile.name : user.email; // Save sender name
                 }
                 try {
                     if(editing && editing.id) await db.collection('cases').doc(editing.id).update(final);
@@ -604,7 +627,7 @@
                                 </div>
                             )}
                             
-                            {(view==='register' || view==='referral') && <CaseForm config={config} initialData={editing} isReferral={!isAdmin} onSave={d=>handleSave(isAdmin?d:{...d, isReferral:true, status:'Pendiente'})} onCancel={()=>setView(isAdmin?'dashboard':'my_referrals')} />}
+                            {(view==='register' || view==='referral') && <CaseForm config={config} initialData={editing} isReferral={!isAdmin} userProfile={userProfile} onSave={d=>handleSave(isAdmin?d:{...d, isReferral:true, status:'Pendiente'})} onCancel={()=>setView(isAdmin?'dashboard':'my_referrals')} />}
                             
                             {isAdmin && view==='students' && !selectedStudent && <div className="fade-in"><h2 className="text-2xl font-bold mb-6">Directorio</h2><div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-xs"><tr><th className="p-4">Estudiante</th><th className="p-4">Curso</th><th className="p-4">N° Casos</th><th className="p-4"></th></tr></thead><tbody className="divide-y divide-slate-100">{Object.values(data.cases.reduce((acc,c)=>{if(!acc[c.studentName])acc[c.studentName]={name:c.studentName,course:c.course,count:0};acc[c.studentName].count++;return acc},{})).map(s=><tr key={s.name} className="hover:bg-slate-50"><td className="p-4 font-bold text-slate-700">{s.name}</td><td className="p-4">{s.course}</td><td className="p-4"><span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md font-bold">{s.count}</span></td><td className="p-4 text-right"><button onClick={()=>setSelectedStudent(s.name)} className="text-indigo-600 hover:text-indigo-800 font-medium text-xs border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-50">Ver Perfil</button></td></tr>)}</tbody></table></div></div>}
                             
@@ -626,7 +649,9 @@
                                 </div>
                             )}
 
-                            {!isAdmin && view==='my_referrals' && <MyReferralsList items={(data.allRaw||[]).filter(x => x.createdBy === user.email)} />}
+                            {!isAdmin && view==='my_referrals' && <MyReferralsList items={(data.allRaw||[]).filter(x => x.createdBy === user.email)} onOpen={setViewingRef} />}
+
+                            {viewingRef && <Modal onClose={()=>setViewingRef(null)}><h3 className="font-bold text-lg mb-4">Seguimiento: {viewingRef.studentName}</h3><div className="space-y-4 max-h-96 overflow-y-auto bg-slate-50 p-4 rounded-xl border">{(viewingRef.interventions||[]).length===0?<p className="text-sm italic text-slate-500">Sin movimientos aún.</p>:viewingRef.interventions.map((int,i)=><div key={i} className="bg-white p-3 rounded shadow-sm border"><div className="text-xs font-bold text-indigo-600">{new Date(int.date).toLocaleDateString()}</div><p className="text-sm">{int.content}</p></div>)}</div><button onClick={()=>setViewingRef(null)} className="mt-4 w-full bg-slate-200 py-2 rounded font-bold">Cerrar</button></Modal>}
                         </div>
                     </main>
                 </div>
