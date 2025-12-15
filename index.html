@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Convivencia Escolar Pro - Gestión Integral</title>
+    <title>Convivencia Escolar Pro - Analytics</title>
     
     <!-- 1. Estilos y Fuentes -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -68,7 +68,7 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
 
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
         // --- UTILS ---
         const Icon = ({ name, size = 18, className = "", onClick }) => {
@@ -76,25 +76,53 @@
             return <i data-lucide={name} width={size} height={size} className={className} onClick={onClick}></i>;
         };
 
-        const generateNarrative = (c) => {
-            const dateStr = new Date(c.date).toLocaleDateString();
-            let text = `Con fecha ${dateStr}, se registra una situación asociada al estudiante ${c.studentName} del curso ${c.course}. `;
-            const context = [];
-            if(c.isPIE) context.push("perteneciente al Programa de Integración Escolar (PIE)");
-            if(c.hasExternalSupport) context.push("con apoyo de redes externas");
-            if(context.length > 0) text += `El estudiante es ${context.join(' y ')}. `;
+        const generateExtendedNarrative = (c, type, allCases = []) => {
+            if (type === 'single' || type === 'referral_single') {
+                const dateStr = new Date(c.date).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                
+                let text = `En el presente documento se detalla el reporte de convivencia escolar correspondiente al estudiante ${c.studentName.toUpperCase()}, matriculado en el curso ${c.course}. El evento principal se registró con fecha ${dateStr}.\n\n`;
+                
+                text += `CONTEXTO DEL REPORTE:\n`;
+                if (c.isReferral) {
+                    text += `El procedimiento se inició mediante una derivación formal realizada por ${c.senderName} (${c.senderJob}), quien identificó una situación catalogada preliminarmente bajo el ámbito de "${c.cause}". `;
+                    text += `En el relato de los hechos, se describe: "${c.description}". `;
+                    if(c.appliedStrategies && c.appliedStrategies.length > 0) {
+                        text += `Es importante destacar que, previo a esta derivación, el docente/funcionario aplicó estrategias de manejo tales como: ${c.appliedStrategies.join(', ').toLowerCase()}. `;
+                    }
+                } else {
+                    text += `El caso fue ingresado directamente por el equipo de gestión, tipificando la falta como "${c.type}". La descripción técnica del evento señala: "${c.description}". `;
+                }
 
-            if (c.isReferral) {
-                text += `El caso fue derivado por ${c.senderName} (${c.senderJob}), reportando una situación de ${c.cause || 'carácter general'}. `;
-                text += `En el reporte inicial se describe: "${c.description}". `;
-            } else {
-                text += `Se tipificó el caso como "${c.type}". `;
-                text += `Descripción del evento: "${c.description}". `;
+                text += `\n\nANÁLISIS DE FACTORES:\n`;
+                const factors = [];
+                if(c.isPIE) factors.push("pertenencia al Programa de Integración Escolar (PIE)");
+                if(c.hasExternalSupport) factors.push("apoyo activo de redes externas");
+                
+                if(factors.length > 0) {
+                    text += `Para el abordaje de este caso, se ha considerado como factor contextual relevante la ${factors.join(' y la ')} del estudiante. Esto sugiere la necesidad de una articulación con los equipos de apoyo correspondientes. `;
+                } else {
+                    text += `No se reportan factores de vulnerabilidad escolar adicionales (PIE o Redes) en la ficha del estudiante para este evento. `;
+                }
+
+                text += `\n\nESTADO Y RESOLUCIÓN:\n`;
+                if (c.status === 'Cerrado') {
+                    text += `A la fecha de emisión de este informe, el caso se encuentra CERRADO, habiéndose ejecutado las acciones estipuladas en el reglamento de convivencia. `;
+                } else {
+                    text += `Actualmente, el caso se mantiene en estado ${c.status.toUpperCase()}. El equipo de Convivencia Escolar continúa realizando el seguimiento y monitoreo de los acuerdos establecidos. `;
+                }
+                
+                return text;
+            } else if (type === 'course') {
+                const total = allCases.length;
+                const types = allCases.reduce((acc, curr) => { acc[curr.type||curr.cause] = (acc[curr.type||curr.cause]||0)+1; return acc; }, {});
+                const topType = Object.entries(types).sort((a,b)=>b[1]-a[1])[0];
+                
+                return `Se presenta el informe consolidado del curso ${extraInfo}, abarcando el periodo actual. Se han registrado un total de ${total} incidencias.\n\n` +
+                       `ANÁLISIS DE TENDENCIAS:\n` +
+                       `La tipificación más recurrente en este grupo curso corresponde a "${topType ? topType[0] : 'N/A'}", representando una parte significativa de los reportes. ` +
+                       `Se sugiere al equipo docente focalizar estrategias preventivas en esta área.`;
             }
-            if (c.status === 'Cerrado') text += `Actualmente el caso se encuentra CERRADO. `;
-            else text += `El caso se mantiene ABIERTO y en seguimiento. `;
-            
-            return text;
+            return "";
         };
 
         const generatePDF = (title, data, type, extraInfo = "", managerName = "Encargado") => {
@@ -102,72 +130,118 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             const pageWidth = doc.internal.pageSize.width;
+            const pageHeight = doc.internal.pageSize.height;
             
-            doc.setFillColor(49, 46, 129); doc.rect(0, 0, pageWidth, 40, 'F');
-            doc.setFillColor(67, 56, 202); doc.circle(20, 20, 12, 'F'); 
-            doc.setTextColor(255, 255, 255); doc.setFontSize(22); doc.setFont(undefined, 'bold'); doc.text("INFORME DE CONVIVENCIA", 40, 22);
-            doc.setFontSize(10); doc.setFont(undefined, 'normal'); doc.text("Sistema de Gestión Escolar Integral", 40, 28);
-            doc.text(`Fecha Emisión: ${new Date().toLocaleDateString()}`, pageWidth - 15, 22, { align: 'right' });
-            doc.text(`Ref: ${title}`, pageWidth - 15, 28, { align: 'right' });
+            // --- HEADER INSTITUCIONAL ---
+            doc.setFillColor(49, 46, 129); doc.rect(0, 0, pageWidth, 35, 'F'); // Azul oscuro
+            doc.setFillColor(79, 70, 229); doc.rect(0, 35, pageWidth, 2, 'F'); // Línea acento
+            
+            // Logo simulado
+            doc.setFillColor(255, 255, 255); doc.circle(25, 17, 10, 'F');
+            doc.setFontSize(16); doc.setFont(undefined, 'bold'); doc.text("C", 22, 22); // Letra logo
+            
+            doc.setTextColor(255, 255, 255); 
+            doc.setFontSize(18); doc.text("INFORME DE CONVIVENCIA ESCOLAR", 45, 18);
+            doc.setFontSize(10); doc.setFont(undefined, 'normal'); doc.text("Departamento de Orientación y Convivencia", 45, 24);
+            
+            doc.setFontSize(9); 
+            doc.text(`Fecha: ${new Date().toLocaleDateString()}`, pageWidth - 15, 15, { align: 'right' });
+            // Mostrar Folio si existe
+            const folioText = (type === 'single' || type === 'referral_single') && data.folio ? `Folio: ${data.folio}` : `Ref: ${Math.floor(Math.random()*10000)}`;
+            doc.text(folioText, pageWidth - 15, 20, { align: 'right' });
 
             doc.setTextColor(30, 41, 59);
             let y = 55;
 
+            // --- CUERPO DEL REPORTE ---
             if (type === 'single' || type === 'referral_single') {
                 const c = data;
-                doc.setFontSize(14); doc.setFont(undefined, 'bold'); doc.setTextColor(79, 70, 229);
-                doc.text(c.studentName.toUpperCase(), 15, y);
-                doc.setFontSize(10); doc.setTextColor(100); doc.text(c.course, 15, y + 6);
                 
-                const statusColor = c.status === 'Cerrado' ? [16, 185, 129] : [245, 158, 11];
-                doc.setFillColor(...statusColor); doc.roundedRect(pageWidth - 45, y - 5, 30, 8, 2, 2, 'F');
-                doc.setTextColor(255); doc.setFontSize(8); doc.setFont(undefined, 'bold');
-                doc.text((c.status || 'ABIERTO').toUpperCase(), pageWidth - 30, y, { align: 'center' });
+                // Título
+                doc.setFontSize(16); doc.setFont(undefined, 'bold'); doc.setTextColor(49, 46, 129);
+                doc.text(c.studentName.toUpperCase(), 15, y);
+                doc.setFontSize(11); doc.setTextColor(100); doc.text(`Curso: ${c.course}  |  Estado: ${c.status}`, 15, y + 7);
                 y += 20;
 
-                const keyData = [
-                    ['Fecha Evento', new Date(c.date).toLocaleDateString(), 'Tipificación', c.type || c.cause || 'N/A'], 
-                    ['Estudiante PIE', c.isPIE ? 'SÍ' : 'NO', 'Redes Externas', c.hasExternalSupport ? 'SÍ' : 'NO'], 
-                    ['Profesional', c.professional || 'Por asignar', 'Solicitante', c.senderName || 'Ingreso Directo']
+                // Tabla Resumen
+                const summaryData = [
+                    ['Folio', c.folio || 'N/A', 'Fecha Evento', new Date(c.date).toLocaleDateString()],
+                    ['Tipificación', c.type || c.cause || 'N/A', 'Profesional', c.professional || 'Sin asignar'], 
+                    ['Condición PIE', c.isPIE ? 'SÍ' : 'NO', 'Redes Externas', c.hasExternalSupport ? 'SÍ' : 'NO']
                 ];
-                doc.autoTable({ startY: y, head: [], body: keyData, theme: 'grid', styles: { fontSize: 9, cellPadding: 3 }, columnStyles: { 0: { fontStyle: 'bold', fillColor: [241, 245, 249] }, 2: { fontStyle: 'bold', fillColor: [241, 245, 249] } } });
-                y = doc.lastAutoTable.finalY + 10;
+                doc.autoTable({ 
+                    startY: y, head: [], body: summaryData, theme: 'plain', 
+                    styles: { fontSize: 10, cellPadding: 4, lineColor: [200, 200, 200], lineWidth: 0.1 }, 
+                    columnStyles: { 0: { fontStyle: 'bold', textColor: [49, 46, 129] }, 2: { fontStyle: 'bold', textColor: [49, 46, 129] } } 
+                });
+                y = doc.lastAutoTable.finalY + 15;
 
-                doc.setFontSize(11); doc.setFont(undefined, 'bold'); doc.setTextColor(30); doc.text("ANÁLISIS DE LA SITUACIÓN", 15, y); y += 6;
-                doc.setFont(undefined, 'normal'); doc.setFontSize(10);
-                const narrative = generateNarrative(c);
+                // Texto Narrativo Extenso
+                doc.setFontSize(12); doc.setFont(undefined, 'bold'); doc.setTextColor(30); 
+                doc.text("DETALLE Y ANÁLISIS DEL CASO", 15, y); 
+                doc.setLineWidth(0.5); doc.setDrawColor(79, 70, 229); doc.line(15, y+2, 90, y+2); // Subrayado
+                y += 10;
+                
+                doc.setFont(undefined, 'normal'); doc.setFontSize(10); doc.setTextColor(50);
+                const narrative = generateExtendedNarrative(c, type);
                 const splitText = doc.splitTextToSize(narrative, pageWidth - 30);
-                doc.text(splitText, 15, y); y += (splitText.length * 5) + 10;
+                doc.text(splitText, 15, y); 
+                y += (splitText.length * 5) + 15;
 
+                // Bitácora
                 if (c.interventions && c.interventions.length > 0) {
-                    doc.setFontSize(11); doc.setFont(undefined, 'bold'); doc.text("BITÁCORA DE GESTIÓN Y ACUERDOS", 15, y); y += 5;
+                    if (y > pageHeight - 60) { doc.addPage(); y = 30; }
+
+                    doc.setFontSize(12); doc.setFont(undefined, 'bold'); doc.setTextColor(30); 
+                    doc.text("REGISTRO DE INTERVENCIONES", 15, y);
+                    doc.line(15, y+2, 90, y+2);
+                    y += 10;
+
                     const logBody = c.interventions.map(i => [
                         new Date(i.date).toLocaleDateString(), 
                         i.professional || 'Sistema', 
-                        i.content + (i.actions && i.actions.length > 0 ? `\n[Acciones: ${i.actions.join(', ')}]` : '')
+                        i.content + (i.actions && i.actions.length > 0 ? `\n>>> Acciones: ${i.actions.join(', ')}` : '')
                     ]);
-                    doc.autoTable({ startY: y, head: [['Fecha', 'Resp.', 'Gestión / Acciones']], body: logBody, theme: 'striped', headStyles: { fillColor: [79, 70, 229] }, styles: { fontSize: 9 }, columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 35 } } });
-                    y = doc.lastAutoTable.finalY + 15;
+                    
+                    doc.autoTable({ 
+                        startY: y, head: [['Fecha', 'Responsable', 'Detalle de Gestión / Acuerdos']], body: logBody, 
+                        theme: 'striped', 
+                        headStyles: { fillColor: [49, 46, 129], fontStyle: 'bold' }, 
+                        styles: { fontSize: 9, cellPadding: 3, valign: 'top' }, 
+                        columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 35 } } 
+                    });
+                    y = doc.lastAutoTable.finalY + 20;
                 }
+
             } else if (type === 'course') {
-                doc.setFontSize(16); doc.text(`Informe de Curso: ${extraInfo}`, 15, y); y += 10;
-                const total = data.length;
-                const pieCount = data.filter(x=>x.isPIE).length;
-                const closed = data.filter(x=>x.status==='Cerrado').length;
+                doc.setFontSize(16); doc.text(`Informe Situacional: ${extraInfo}`, 15, y); y += 10;
                 
-                doc.setFontSize(10);
-                doc.text(`Total Casos: ${total}`, 15, y); doc.text(`Alumnos PIE: ${pieCount}`, 80, y); doc.text(`Cerrados: ${closed}`, 150, y); y += 10;
+                const narrative = generateExtendedNarrative(null, type, data);
+                doc.setFontSize(10); doc.text(doc.splitTextToSize(narrative, pageWidth - 30), 15, y);
+                y += 30;
                 
-                const rows = data.map(d => [new Date(d.date).toLocaleDateString(), d.studentName, d.type || d.cause, d.isPIE?'SÍ':'NO', d.status || 'Abierto']);
-                doc.autoTable({ startY: y, head: [['Fecha', 'Estudiante', 'Tipo', 'PIE', 'Estado']], body: rows, theme: 'grid', headStyles: { fillColor: [49, 46, 129] }, styles: { fontSize: 8 } });
+                // Agregamos Folio a la tabla de curso
+                const rows = data.map(d => [d.folio || '-', new Date(d.date).toLocaleDateString(), d.studentName, d.type || d.cause, d.status || 'Abierto']);
+                doc.autoTable({ startY: y, head: [['Folio', 'Fecha', 'Estudiante', 'Tipo', 'Estado']], body: rows, theme: 'grid', headStyles: { fillColor: [49, 46, 129] }, styles: { fontSize: 9 } });
                 y = doc.lastAutoTable.finalY + 20;
             }
 
-            const pageHeight = doc.internal.pageSize.height;
-            doc.setDrawColor(200); doc.line(20, pageHeight - 30, pageWidth - 20, pageHeight - 30);
-            doc.setFontSize(8); doc.setTextColor(150);
-            doc.text(`${managerName} - Encargado de Convivencia Escolar`, pageWidth / 2, pageHeight - 20, { align: 'center' });
-            doc.save(`${title.replace(/ /g, '_')}.pdf`);
+            // --- PIE DE FIRMA ---
+            if (y > pageHeight - 50) doc.addPage();
+            
+            const firmaY = pageHeight - 40;
+            
+            doc.setDrawColor(100); doc.setLineWidth(0.5);
+            doc.line(70, firmaY, 140, firmaY); // Línea firma
+            
+            doc.setFontSize(10); doc.setFont(undefined, 'bold'); doc.setTextColor(0);
+            doc.text(managerName.toUpperCase(), pageWidth / 2, firmaY + 5, { align: 'center' });
+            
+            doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(100);
+            doc.text("Encargado(a) de Convivencia Escolar", pageWidth / 2, firmaY + 10, { align: 'center' });
+            doc.text("Establecimiento Educacional", pageWidth / 2, firmaY + 14, { align: 'center' });
+
+            doc.save(`${title.replace(/ /g, '_')}_${new Date().getTime()}.pdf`);
         };
 
         const defaultConfig = {
@@ -195,44 +269,49 @@
             </div>
         );
 
-        const ReferralDetailModal = ({ data, onClose }) => (
-            <Modal title={`Seguimiento: ${data.studentName}`} onClose={onClose}>
-                <div className="space-y-8">
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-wrap gap-4 items-center justify-between">
-                        <div><p className="text-xs font-bold text-slate-500 uppercase">Estado Actual</p><span className={`text-lg font-bold ${data.status==='Cerrado'?'text-emerald-600':'text-indigo-600'}`}>{data.status}</span></div>
-                        <div><p className="text-xs font-bold text-slate-500 uppercase">Profesional</p><p className="font-medium text-slate-800">{data.professional || 'En asignación'}</p></div>
-                        <div><p className="text-xs font-bold text-slate-500 uppercase">PIE / Redes</p><div className="flex gap-2 mt-1">{data.isPIE && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold">PIE</span>}{data.hasExternalSupport && <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold">Redes</span>}</div></div>
-                    </div>
-                    
-                    <div>
-                        <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Icon name="clipboard-list" className="text-indigo-600"/> Historial de Gestión</h4>
-                        <div className="relative border-l-2 border-slate-200 ml-3 space-y-6">
-                            {(!data.interventions || data.interventions.length === 0) && (<div className="ml-6 text-sm text-slate-400 italic">Aún no hay registros de gestión en la bitácora.</div>)}
-                            {(data.interventions || []).map((int, idx) => (
-                                <div key={idx} className="ml-6 relative">
-                                    <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-indigo-600 border-2 border-white shadow-sm"></div>
-                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div><span className="text-xs font-bold text-indigo-600 uppercase tracking-wide">Gestión Realizada</span><p className="text-sm text-slate-500">{new Date(int.date).toLocaleDateString()}</p></div>
-                                            <div className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded font-bold">{int.professional || 'Equipo Convivencia'}</div>
-                                        </div>
-                                        <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">{int.content}</p>
-                                        {/* Mostrar acciones asociadas a esta gestión */}
-                                        {int.actions && int.actions.length > 0 && (
-                                            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-2">
-                                                {int.actions.map((act, i) => <span key={i} className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded border border-indigo-100 flex items-center gap-1"><Icon name="check" size={10}/> {act}</span>)}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
+        const LoginScreen = ({ onAuth, error, loading }) => {
+            const [isReg, setIsReg] = useState(false);
+            const [creds, setCreds] = useState({email:'', pass:'', name:'', jobTitle:''});
+            const [success, setSuccess] = useState(false);
+
+            const handleAction = async () => {
+                if(!creds.email || !creds.pass) return alert("Por favor complete todos los campos.");
+                const res = await onAuth(creds, isReg);
+                if(isReg && res) setSuccess(true);
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-slate-100 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-indigo-900 z-0"></div>
+                    <div className="bg-white/95 backdrop-blur-xl p-8 rounded-3xl shadow-2xl w-full max-w-sm relative z-10 border border-white/50">
+                        {loading && <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-20 rounded-3xl flex-col gap-2"><div className="spinner"></div><span className="text-sm font-bold text-indigo-600">Verificando...</span></div>}
+                        <div className="text-center mb-8">
+                            <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-indigo-500/30"><Icon name="school" size={32}/></div>
+                            <h2 className="text-2xl font-extrabold text-slate-800 tracking-tight">Convivencia Pro</h2>
+                            <p className="text-sm text-slate-500 mt-1">Gestión Escolar Integral</p>
                         </div>
+                        {success ? (
+                            <div className="text-center py-4">
+                                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4"><Icon name="check" size={32}/></div>
+                                <h3 className="font-bold text-xl text-slate-800">¡Cuenta Creada!</h3>
+                                <p className="text-slate-500 mb-6">Ya puedes acceder al sistema.</p>
+                                <button onClick={()=>window.location.reload()} className="bg-slate-800 text-white w-full py-3 rounded-xl font-bold hover:bg-slate-900 transition-all">Iniciar Sesión</button>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {isReg && (<><input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none" type="text" placeholder="Nombre Completo" value={creds.name} onChange={e=>setCreds({...creds, name:e.target.value})} /><input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none" type="text" placeholder="Cargo (Ej. Profesor Jefe)" value={creds.jobTitle} onChange={e=>setCreds({...creds, jobTitle:e.target.value})} /></>)}
+                                <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none" type="email" placeholder="Correo institucional" value={creds.email} onChange={e=>setCreds({...creds, email:e.target.value})} />
+                                <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none" type="password" placeholder="Contraseña" value={creds.pass} onChange={e=>setCreds({...creds, pass:e.target.value})} />
+                                {error && <div className="bg-rose-50 text-rose-600 text-xs p-3 rounded-lg flex items-center gap-2 font-medium"><Icon name="alert-triangle" size={14}/> {error}</div>}
+                                <button onClick={handleAction} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all transform active:scale-95">{isReg ? 'Registrar Funcionario' : 'Ingresar al Sistema'}</button>
+                                <div className="text-center mt-4"><button onClick={()=>setIsReg(!isReg)} className="text-sm text-indigo-600 font-medium hover:underline">{isReg ? '¿Ya tienes cuenta? Ingresa aquí' : '¿No tienes cuenta? Regístrate'}</button></div>
+                            </div>
+                        )}
                     </div>
                 </div>
-            </Modal>
-        );
+            );
+        };
 
-        // --- COMPONENTE DE CONFIGURACIÓN MODIFICADO ---
         const ConfigView = ({ config, users, onUpdateConf, onUpdateRole, onDeleteUser }) => {
             const Section = ({ k, title, icon }) => {
                 const [v, setV] = useState('');
@@ -293,48 +372,69 @@
             );
         };
 
-        const LoginScreen = ({ onAuth, error, loading }) => {
-            const [isReg, setIsReg] = useState(false);
-            const [creds, setCreds] = useState({email:'', pass:'', name:'', jobTitle:''});
-            const [success, setSuccess] = useState(false);
-
-            const handleAction = async () => {
-                if(!creds.email || !creds.pass) return alert("Por favor complete todos los campos.");
-                const res = await onAuth(creds, isReg);
-                if(isReg && res) setSuccess(true);
-            };
-
-            return (
-                <div className="min-h-screen flex items-center justify-center bg-slate-100 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-indigo-900 z-0"></div>
-                    <div className="bg-white/95 backdrop-blur-xl p-8 rounded-3xl shadow-2xl w-full max-w-sm relative z-10 border border-white/50">
-                        {loading && <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-20 rounded-3xl flex-col gap-2"><div className="spinner"></div><span className="text-sm font-bold text-indigo-600">Verificando...</span></div>}
-                        <div className="text-center mb-8">
-                            <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-indigo-500/30"><Icon name="school" size={32}/></div>
-                            <h2 className="text-2xl font-extrabold text-slate-800 tracking-tight">Convivencia Pro</h2>
-                            <p className="text-sm text-slate-500 mt-1">Gestión Escolar Integral</p>
+        const ReferralDetailModal = ({ data, onClose }) => (
+            <Modal title={`Seguimiento: ${data.studentName}`} onClose={onClose}>
+                <div className="space-y-8">
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-wrap gap-4 items-center justify-between">
+                        <div><p className="text-xs font-bold text-slate-500 uppercase">Estado Actual</p><span className={`text-lg font-bold ${data.status==='Cerrado'?'text-emerald-600':'text-indigo-600'}`}>{data.status}</span></div>
+                        <div><p className="text-xs font-bold text-slate-500 uppercase">Profesional</p><p className="font-medium text-slate-800">{data.professional || 'En asignación'}</p></div>
+                        <div><p className="text-xs font-bold text-slate-500 uppercase">PIE / Redes</p><div className="flex gap-2 mt-1">{data.isPIE && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold">PIE</span>}{data.hasExternalSupport && <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold">Redes</span>}</div></div>
+                    </div>
+                    
+                    <div>
+                        <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Icon name="clipboard-list" className="text-indigo-600"/> Historial de Gestión</h4>
+                        <div className="relative border-l-2 border-slate-200 ml-3 space-y-6">
+                            {(!data.interventions || data.interventions.length === 0) && (<div className="ml-6 text-sm text-slate-400 italic">Aún no hay registros de gestión en la bitácora.</div>)}
+                            {(data.interventions || []).map((int, idx) => (
+                                <div key={idx} className="ml-6 relative">
+                                    <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-indigo-600 border-2 border-white shadow-sm"></div>
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div><span className="text-xs font-bold text-indigo-600 uppercase tracking-wide">Gestión Realizada</span><p className="text-sm text-slate-500">{new Date(int.date).toLocaleDateString()}</p></div>
+                                            <div className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded font-bold">{int.professional || 'Equipo Convivencia'}</div>
+                                        </div>
+                                        <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">{int.content}</p>
+                                        {int.actions && int.actions.length > 0 && (
+                                            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-2">
+                                                {int.actions.map((act, i) => <span key={i} className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded border border-indigo-100 flex items-center gap-1"><Icon name="check" size={10}/> {act}</span>)}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                        {success ? (
-                            <div className="text-center py-4">
-                                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4"><Icon name="check" size={32}/></div>
-                                <h3 className="font-bold text-xl text-slate-800">¡Cuenta Creada!</h3>
-                                <p className="text-slate-500 mb-6">Ya puedes acceder al sistema.</p>
-                                <button onClick={()=>window.location.reload()} className="bg-slate-800 text-white w-full py-3 rounded-xl font-bold hover:bg-slate-900 transition-all">Iniciar Sesión</button>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {isReg && (<><input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none" type="text" placeholder="Nombre Completo" value={creds.name} onChange={e=>setCreds({...creds, name:e.target.value})} /><input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none" type="text" placeholder="Cargo (Ej. Profesor Jefe)" value={creds.jobTitle} onChange={e=>setCreds({...creds, jobTitle:e.target.value})} /></>)}
-                                <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none" type="email" placeholder="Correo institucional" value={creds.email} onChange={e=>setCreds({...creds, email:e.target.value})} />
-                                <input className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none" type="password" placeholder="Contraseña" value={creds.pass} onChange={e=>setCreds({...creds, pass:e.target.value})} />
-                                {error && <div className="bg-rose-50 text-rose-600 text-xs p-3 rounded-lg flex items-center gap-2 font-medium"><Icon name="alert-triangle" size={14}/> {error}</div>}
-                                <button onClick={handleAction} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all transform active:scale-95">{isReg ? 'Registrar Funcionario' : 'Ingresar al Sistema'}</button>
-                                <div className="text-center mt-4"><button onClick={()=>setIsReg(!isReg)} className="text-sm text-indigo-600 font-medium hover:underline">{isReg ? '¿Ya tienes cuenta? Ingresa aquí' : '¿No tienes cuenta? Regístrate'}</button></div>
-                            </div>
-                        )}
                     </div>
                 </div>
-            );
-        };
+            </Modal>
+        );
+
+        const MyReferralsList = ({ items, onOpen }) => (
+            <div className="fade-in max-w-5xl mx-auto">
+                <div className="flex justify-between items-end mb-6"><div><h2 className="text-3xl font-bold text-slate-800 tracking-tight">Mis Derivaciones</h2><p className="text-slate-500 mt-1">Historial de casos enviados a Convivencia Escolar</p></div></div>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-xs tracking-wider"><tr><th className="p-5">Folio</th><th className="p-5">Fecha</th><th className="p-5">Estudiante</th><th className="p-5">Causa / Ámbito</th><th className="p-5">Estado</th><th className="p-5 text-center">Novedades</th><th className="p-5 text-right">Acciones</th></tr></thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {items.map(r => {
+                                const hasNews = r.interventions && r.interventions.length > 0 && r.status !== 'Cerrado';
+                                return (
+                                <tr key={r.id} className="hover:bg-slate-50 transition-colors group">
+                                    <td className="p-5 text-xs text-slate-400 font-mono">{r.folio || '-'}</td>
+                                    <td className="p-5 font-medium text-slate-600">{new Date(r.date).toLocaleDateString()}</td>
+                                    <td className="p-5"><div className="font-bold text-slate-800">{r.studentName}</div><div className="text-xs text-slate-500">{r.course}</div></td>
+                                    <td className="p-5"><span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-xs font-medium">{r.cause || 'No especificado'}</span></td>
+                                    <td className="p-5"><span className={`badge ${r.status==='Cerrado'?'badge-closed':r.status==='Pendiente'?'badge-pending':'badge-active'}`}>{r.status || 'Pendiente'}</span></td>
+                                    <td className="p-5 text-center">{hasNews && <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full text-xs font-bold animate-pulse"><Icon name="bell" size={12}/> Actividad</span>}</td>
+                                    <td className="p-5 text-right"><button onClick={()=>onOpen(r)} className="text-indigo-600 hover:text-indigo-800 font-medium text-sm flex items-center gap-1 ml-auto hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors"><Icon name="eye" size={16}/> Ver Detalle</button></td>
+                                </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                    {items.length === 0 && <div className="p-12 text-center text-slate-400 italic">No has realizado derivaciones aún.</div>}
+                </div>
+            </div>
+        );
 
         const CaseForm = ({ config, initialData, onSave, onCancel, isReferralView, userProfile }) => {
             const [d, setD] = useState(() => {
@@ -370,7 +470,10 @@
                     <div className="flex justify-between items-start mb-8">
                         <div>
                             <div className="flex items-center gap-3 mb-1"><button onClick={onCancel} className="text-slate-400 hover:text-slate-600"><Icon name="arrow-left"/></button><h2 className="text-2xl font-bold text-slate-800">{isReferralView ? "Nueva Derivación" : isManagingReferral ? "Gestionar Derivación" : "Registro Directo"}</h2></div>
-                            <p className="text-slate-500 text-sm ml-9">{isReferralView ? "Complete los antecedentes para derivar el caso." : "Revise los antecedentes y registre la gestión."}</p>
+                            <p className="text-slate-500 text-sm ml-9 flex items-center gap-2">
+                                {d.folio && <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-xs font-mono">FOLIO: {d.folio}</span>}
+                                {isReferralView ? "Complete los antecedentes para derivar el caso." : "Revise los antecedentes y registre la gestión."}
+                            </p>
                         </div>
                         <div className="flex gap-2">
                             {d.id && !isReferralView && d.status !== 'Cerrado' && (<button onClick={handleCloseCase} className="bg-emerald-100 text-emerald-700 px-4 py-2 rounded-lg font-bold hover:bg-emerald-200 transition-colors flex items-center gap-2"><Icon name="check-circle" size={18}/> Cerrar Caso</button>)}
@@ -471,55 +574,238 @@
             );
         };
 
-        const MyReferralsList = ({ items, onOpen }) => (
-            <div className="fade-in max-w-5xl mx-auto">
-                <div className="flex justify-between items-end mb-6"><div><h2 className="text-3xl font-bold text-slate-800 tracking-tight">Mis Derivaciones</h2><p className="text-slate-500 mt-1">Historial de casos enviados a Convivencia Escolar</p></div></div>
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-xs tracking-wider"><tr><th className="p-5">Fecha</th><th className="p-5">Estudiante</th><th className="p-5">Causa / Ámbito</th><th className="p-5">Estado</th><th className="p-5 text-center">Novedades</th><th className="p-5 text-right">Acciones</th></tr></thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {items.map(r => {
-                                const hasNews = r.interventions && r.interventions.length > 0 && r.status !== 'Cerrado';
-                                return (
-                                <tr key={r.id} className="hover:bg-slate-50 transition-colors group">
-                                    <td className="p-5 font-medium text-slate-600">{new Date(r.date).toLocaleDateString()}</td>
-                                    <td className="p-5"><div className="font-bold text-slate-800">{r.studentName}</div><div className="text-xs text-slate-500">{r.course}</div></td>
-                                    <td className="p-5"><span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-xs font-medium">{r.cause || 'No especificado'}</span></td>
-                                    <td className="p-5"><span className={`badge ${r.status==='Cerrado'?'badge-closed':r.status==='Pendiente'?'badge-pending':'badge-active'}`}>{r.status || 'Pendiente'}</span></td>
-                                    <td className="p-5 text-center">{hasNews && <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full text-xs font-bold animate-pulse"><Icon name="bell" size={12}/> Actividad</span>}</td>
-                                    <td className="p-5 text-right"><button onClick={()=>onOpen(r)} className="text-indigo-600 hover:text-indigo-800 font-medium text-sm flex items-center gap-1 ml-auto hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors"><Icon name="eye" size={16}/> Ver Detalle</button></td>
-                                </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                    {items.length === 0 && <div className="p-12 text-center text-slate-400 italic">No has realizado derivaciones aún.</div>}
-                </div>
-            </div>
-        );
+        const Dashboard = ({ cases, config }) => {
+            const [filters, setFilters] = useState({ start: '', end: '', course: '', professional: '' });
+            
+            const filteredCases = useMemo(() => {
+                return cases.filter(c => {
+                    const d = new Date(c.date);
+                    const matchStart = !filters.start || d >= new Date(filters.start);
+                    const matchEnd = !filters.end || d <= new Date(filters.end);
+                    const matchCourse = !filters.course || c.course === filters.course;
+                    const matchProf = !filters.professional || c.professional === filters.professional;
+                    return matchStart && matchEnd && matchCourse && matchProf;
+                });
+            }, [cases, filters]);
 
-        const Dashboard = ({ cases, onEdit, onDelete, onPrint }) => {
             const stats = useMemo(() => {
-                const total = cases.length; 
-                // Cambio Riesgo por PIE
-                const pieCount = cases.filter(c => c.isPIE).length; 
-                const open = cases.filter(c => c.status !== 'Cerrado').length;
-                return { total, pieCount, open };
-            }, [cases]);
+                const total = filteredCases.length;
+                const pieCount = filteredCases.filter(c => c.isPIE).length;
+                const closed = filteredCases.filter(c => c.status === 'Cerrado').length;
+                const networks = filteredCases.filter(c => c.hasExternalSupport).length;
+                
+                const typeCounts = filteredCases.reduce((acc, c) => {
+                    const t = c.type || c.cause || 'Otros';
+                    acc[t] = (acc[t] || 0) + 1;
+                    return acc;
+                }, {});
+
+                // NUEVO: Ranking de Cursos
+                const courseRanking = Object.entries(
+                    filteredCases.reduce((acc, c) => {
+                        acc[c.course] = (acc[c.course] || 0) + 1;
+                        return acc;
+                    }, {})
+                ).sort((a, b) => b[1] - a[1]).slice(0, 5); // Top 5
+
+                return { total, pieCount, closed, networks, typeCounts, courseRanking };
+            }, [filteredCases]);
+
+            useEffect(() => {
+                // Gráfico Distribución (Dona)
+                const ctxType = document.getElementById('chartType');
+                if (ctxType && window.Chart) {
+                    if (window.chartInstanceType) window.chartInstanceType.destroy();
+                    const labels = Object.keys(stats.typeCounts);
+                    const data = Object.values(stats.typeCounts);
+                    const total = data.reduce((a, b) => a + b, 0);
+                    
+                    window.chartInstanceType = new Chart(ctxType, {
+                        type: 'doughnut',
+                        data: {
+                            labels: labels.map((l, i) => `${l} (${Math.round((data[i]/total)*100)}%)`),
+                            datasets: [{
+                                data: data,
+                                backgroundColor: ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#10b981', '#f59e0b', '#3b82f6'],
+                                borderWidth: 0,
+                                hoverOffset: 10
+                            }]
+                        },
+                        options: { 
+                            responsive: true, 
+                            plugins: { 
+                                legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } }
+                            }, 
+                            cutout: '65%' 
+                        }
+                    });
+                }
+
+                // Gráfico Evolución (Línea)
+                const ctxEvol = document.getElementById('chartEvolution');
+                if (ctxEvol && window.Chart) {
+                    if (window.chartInstanceEvol) window.chartInstanceEvol.destroy();
+                    
+                    const months = [...new Set(filteredCases.map(c => c.date.substring(0, 7)))].sort();
+                    const topTypes = Object.entries(stats.typeCounts).sort((a,b)=>b[1]-a[1]).slice(0, 5).map(x=>x[0]); 
+                    
+                    const datasets = topTypes.map((type, i) => {
+                        const colors = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#3b82f6'];
+                        return {
+                            label: type,
+                            data: months.map(m => filteredCases.filter(c => c.date.startsWith(m) && (c.type === type || c.cause === type)).length),
+                            borderColor: colors[i],
+                            backgroundColor: colors[i],
+                            tension: 0.4,
+                            borderWidth: 2,
+                            pointRadius: 3
+                        }
+                    });
+
+                    window.chartInstanceEvol = new Chart(ctxEvol, {
+                        type: 'line',
+                        data: { labels: months, datasets: datasets },
+                        options: {
+                            responsive: true,
+                            scales: { y: { beginAtZero: true, grid: { display: true, color: '#f1f5f9' } }, x: { grid: { display: false } } },
+                            plugins: { legend: { position: 'top', align: 'end', labels: { boxWidth: 10, usePointStyle: true } } },
+                            maintainAspectRatio: false
+                        }
+                    });
+                }
+            }, [stats, filteredCases]);
 
             return (
-                <div className="fade-in space-y-8">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 card-hover"><div className="p-4 bg-blue-50 text-blue-600 rounded-xl"><Icon name="folder-open" size={28}/></div><div><p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Total Casos</p><h3 className="text-3xl font-bold text-slate-800">{stats.total}</h3></div></div>
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 card-hover"><div className="p-4 bg-indigo-50 text-indigo-600 rounded-xl"><Icon name="users" size={28}/></div><div><p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Estudiantes PIE</p><h3 className="text-3xl font-bold text-slate-800">{stats.pieCount}</h3></div></div>
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 card-hover"><div className="p-4 bg-emerald-50 text-emerald-600 rounded-xl"><Icon name="activity" size={28}/></div><div><p className="text-xs font-bold text-slate-400 uppercase tracking-wide">En Gestión</p><h3 className="text-3xl font-bold text-slate-800">{stats.open}</h3></div></div>
+                <div className="fade-in space-y-8 pb-10">
+                    <div className="flex justify-between items-center mb-2">
+                        <h2 className="text-2xl font-bold text-slate-800">Panel de Análisis</h2>
+                        <p className="text-sm text-slate-500">Métricas en tiempo real</p>
                     </div>
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-800 text-lg">Casos Recientes</h3></div>
-                        <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs"><tr><th className="p-4">Estudiante</th><th className="p-4">Tipo/Causa</th><th className="p-4">PIE</th><th className="p-4">Estado</th><th className="p-4 text-right">Acciones</th></tr></thead><tbody className="divide-y divide-slate-100">{cases.slice(0, 10).map(c => (<tr key={c.id} className="hover:bg-slate-50 transition-colors"><td className="p-4 font-bold text-slate-700">{c.studentName}<br/><span className="text-xs font-normal text-slate-500">{c.course}</span></td><td className="p-4">{c.type || c.cause}</td><td className="p-4">{c.isPIE ? <span className="badge badge-pie">PIE</span> : <span className="text-slate-400">-</span>}</td><td className="p-4"><span className={`badge ${c.status==='Cerrado'?'badge-closed':'badge-active'}`}>{c.status||'Abierto'}</span></td><td className="p-4 flex justify-end gap-2"><button onClick={()=>onPrint("Ficha Caso", c, 'single')} className="p-2 text-slate-400 hover:text-indigo-600 rounded-lg" title="PDF"><Icon name="printer"/></button><button onClick={()=>onEdit(c)} className="p-2 text-slate-400 hover:text-indigo-600 rounded-lg" title="Gestionar"><Icon name="edit-3"/></button><button onClick={()=>onDelete(c.id)} className="p-2 text-slate-400 hover:text-rose-600 rounded-lg" title="Eliminar"><Icon name="trash-2"/></button></td></tr>))}</tbody></table></div>
+
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-end">
+                        <div className="flex-1 min-w-[150px]">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Desde</label>
+                            <input type="date" className="w-full text-sm p-2 border rounded-lg bg-slate-50" value={filters.start} onChange={e=>setFilters({...filters, start:e.target.value})}/>
+                        </div>
+                        <div className="flex-1 min-w-[150px]">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Hasta</label>
+                            <input type="date" className="w-full text-sm p-2 border rounded-lg bg-slate-50" value={filters.end} onChange={e=>setFilters({...filters, end:e.target.value})}/>
+                        </div>
+                        <div className="flex-1 min-w-[150px]">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Curso</label>
+                            <select className="w-full text-sm p-2 border rounded-lg bg-slate-50" value={filters.course} onChange={e=>setFilters({...filters, course:e.target.value})}><option value="">Todos</option>{config.courses.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                        </div>
+                        <div className="flex-1 min-w-[150px]">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Profesional</label>
+                            <select className="w-full text-sm p-2 border rounded-lg bg-slate-50" value={filters.professional} onChange={e=>setFilters({...filters, professional:e.target.value})}><option value="">Todos</option>{config.professionals.map(p=><option key={p} value={p}>{p}</option>)}</select>
+                        </div>
+                        <button onClick={()=>setFilters({start:'', end:'', course:'', professional:''})} className="px-4 py-2 text-sm text-indigo-600 font-bold bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors">Limpiar</button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 card-hover">
+                            <div className="flex justify-between items-start mb-2"><div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><Icon name="folder-open" size={24}/></div><span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded">Total</span></div>
+                            <h3 className="text-3xl font-bold text-slate-800">{stats.total}</h3>
+                            <p className="text-xs text-slate-400 mt-1">Casos registrados</p>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 card-hover">
+                            <div className="flex justify-between items-start mb-2"><div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl"><Icon name="users" size={24}/></div><span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded">PIE</span></div>
+                            <h3 className="text-3xl font-bold text-slate-800">{stats.pieCount} <span className="text-sm font-normal text-slate-400">({stats.total>0?Math.round((stats.pieCount/stats.total)*100):0}%)</span></h3>
+                            <p className="text-xs text-slate-400 mt-1">Estudiantes integrados</p>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 card-hover">
+                            <div className="flex justify-between items-start mb-2"><div className="p-3 bg-cyan-50 text-cyan-600 rounded-xl"><Icon name="share-2" size={24}/></div><span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded">Redes</span></div>
+                            <h3 className="text-3xl font-bold text-slate-800">{stats.networks}</h3>
+                            <p className="text-xs text-slate-400 mt-1">Con apoyo externo</p>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 card-hover">
+                            <div className="flex justify-between items-start mb-2"><div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><Icon name="check-circle" size={24}/></div><span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded">Éxito</span></div>
+                            <h3 className="text-3xl font-bold text-slate-800">{stats.closed}</h3>
+                            <p className="text-xs text-slate-400 mt-1">Casos cerrados</p>
+                        </div>
+                    </div>
+
+                    <div className="grid lg:grid-cols-2 gap-6">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                            <h3 className="font-bold text-slate-800 mb-6">Distribución por Tipificación</h3>
+                            <div className="h-72 flex items-center justify-center">
+                                {Object.keys(stats.typeCounts).length > 0 ? <canvas id="chartType"></canvas> : <p className="text-slate-400 text-sm">Sin datos para mostrar</p>}
+                            </div>
+                        </div>
+                        
+                        {/* NUEVO: Ranking de Cursos */}
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                            <h3 className="font-bold text-slate-800 mb-6">Ranking de Cursos (Top 5)</h3>
+                            <div className="space-y-4">
+                                {stats.courseRanking.length > 0 ? stats.courseRanking.map(([course, count], idx) => (
+                                    <div key={course} className="relative">
+                                        <div className="flex justify-between text-sm mb-1">
+                                            <span className="font-bold text-slate-700">{idx+1}. {course}</span>
+                                            <span className="font-bold text-indigo-600">{count} casos</span>
+                                        </div>
+                                        <div className="w-full bg-slate-100 rounded-full h-2.5">
+                                            <div className="bg-indigo-500 h-2.5 rounded-full" style={{width: `${(count / stats.courseRanking[0][1]) * 100}%`}}></div>
+                                        </div>
+                                    </div>
+                                )) : <p className="text-slate-400 text-sm text-center py-10">Sin datos para mostrar</p>}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 className="font-bold text-slate-800 mb-6">Evolución Mensual (Top 5)</h3>
+                        <div className="h-72 flex items-center justify-center">
+                            <canvas id="chartEvolution"></canvas>
+                        </div>
                     </div>
                 </div>
             );
+        };
+
+        const CaseListMaster = ({ cases, onEdit, onDelete, onPrint }) => {
+            const [search, setSearch] = useState("");
+            const filtered = cases.filter(c => 
+                c.studentName.toLowerCase().includes(search.toLowerCase()) || 
+                c.course.toLowerCase().includes(search.toLowerCase()) ||
+                (c.folio && c.folio.toLowerCase().includes(search.toLowerCase())) // Búsqueda por folio
+            );
+
+            return (
+                <div className="fade-in space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold text-slate-800">Listado Maestro de Casos</h2>
+                        <div className="bg-white border border-slate-200 rounded-xl flex items-center px-3 py-2 w-64">
+                            <Icon name="search" size={18} className="text-slate-400"/>
+                            <input className="bg-transparent border-none outline-none text-sm ml-2 w-full" placeholder="Buscar estudiante o folio..." value={search} onChange={e=>setSearch(e.target.value)} />
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs border-b border-slate-200">
+                                <tr><th className="p-4">Folio</th><th className="p-4">Fecha</th><th className="p-4">Estudiante</th><th className="p-4">Curso</th><th className="p-4">Tipo</th><th className="p-4">Estado</th><th className="p-4 text-right">Acciones</th></tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {filtered.map(c => (
+                                    <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                                        <td className="p-4 text-xs text-slate-400 font-mono">{c.folio || '-'}</td>
+                                        <td className="p-4 text-slate-600">{new Date(c.date).toLocaleDateString()}</td>
+                                        <td className="p-4 font-bold text-slate-800">{c.studentName}</td>
+                                        <td className="p-4 text-slate-600">{c.course}</td>
+                                        <td className="p-4"><span className="bg-slate-100 px-2 py-1 rounded text-xs">{c.type||c.cause}</span></td>
+                                        <td className="p-4"><span className={`badge ${c.status==='Cerrado'?'badge-closed':'badge-active'}`}>{c.status}</span></td>
+                                        <td className="p-4 flex justify-end gap-2">
+                                            <button onClick={()=>onPrint("Ficha Caso", c, 'single')} className="p-2 hover:bg-slate-100 rounded text-slate-500"><Icon name="printer" size={16}/></button>
+                                            <button onClick={()=>onEdit(c)} className="p-2 hover:bg-indigo-50 rounded text-indigo-600"><Icon name="edit-3" size={16}/></button>
+                                            <button onClick={()=>onDelete(c.id)} className="p-2 hover:bg-rose-50 rounded text-rose-600"><Icon name="trash-2" size={16}/></button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {filtered.length === 0 && <div className="p-10 text-center text-slate-400">No se encontraron casos.</div>}
+                    </div>
+                </div>
+            )
         };
 
         const App = () => {
@@ -527,7 +813,6 @@
             const [userProfile, setProfile] = useState(null);
             const [role, setRole] = useState('funcionario');
             const [view, setView] = useState('dashboard');
-            // CORRECCIÓN: Inicializar myReferrals para evitar "undefined"
             const [data, setData] = useState({ cases: [], referrals: [], users: [], myReferrals: [] });
             const [config, setConfig] = useState(defaultConfig);
             const [editing, setEditing] = useState(null);
@@ -563,28 +848,42 @@
                 } catch(e) { alert(e.message); setLoading(false); }
             };
 
+            const generateFolio = () => {
+                const year = new Date().getFullYear();
+                const random = Math.floor(1000 + Math.random() * 9000); // 4 dígitos aleatorios
+                return `${year}-${random}`;
+            };
+
             const handleSave = async (d) => {
-                // CORRECCIÓN: Verificación segura de userProfile
                 if(!userProfile) return alert("Error de sesión. Recargue la página.");
                 
                 const final = { ...d, updatedBy: user.email, updatedAt: new Date().toISOString() };
+                
                 if (!d.createdAt) { 
-                    final.createdAt = new Date().toISOString(); final.createdBy = user.email;
+                    final.createdAt = new Date().toISOString(); 
+                    final.createdBy = user.email;
+                    // Generar Folio Único si es nuevo
+                    final.folio = generateFolio();
+                    
                     if(d.isReferral) { final.senderName = userProfile.name; final.senderJob = userProfile.jobTitle; }
                 }
+                
                 try { if(editing && editing.id) await db.collection('cases').doc(editing.id).update(final); else await db.collection('cases').add(final); setEditing(null); setView(role==='admin' ? 'dashboard' : 'my_referrals'); } catch(e) { alert("Error al guardar: " + e.message); }
+            };
+
+            const handleStartManagement = async (referralCase) => {
+                try {
+                    await db.collection('cases').doc(referralCase.id).update({ status: 'En Gestión' });
+                    setEditing({ ...referralCase, status: 'En Gestión' });
+                    setView('register');
+                } catch(e) { alert("Error al iniciar gestión: " + e.message); }
             };
 
             const handleDelete = async (id) => { if(confirm("¿Eliminar registro?")) await db.collection('cases').doc(id).delete(); };
             
-            // NUEVA FUNCIÓN PARA ELIMINAR USUARIOS
             const handleDeleteUser = async (id) => {
-                if(confirm("¿Estás seguro de eliminar este usuario del sistema? Se eliminarán sus permisos de acceso.")) {
-                    try {
-                        await db.collection('users').doc(id).delete();
-                    } catch (e) {
-                        alert("Error al eliminar usuario: " + e.message);
-                    }
+                if(confirm("¿Estás seguro de eliminar este usuario del sistema?")) {
+                    try { await db.collection('users').doc(id).delete(); } catch (e) { alert("Error al eliminar usuario: " + e.message); }
                 }
             };
 
@@ -612,6 +911,7 @@
                                     <>
                                         <MenuBtn active={view==='dashboard'} onClick={()=>setView('dashboard')} icon="layout-dashboard" label="Panel General" />
                                         <MenuBtn active={view==='inbox'} onClick={()=>setView('inbox')} icon="inbox" label="Bandeja Entrada" badge={data.referrals.length} />
+                                        <MenuBtn active={view==='case_list'} onClick={()=>setView('case_list')} icon="list" label="Listado Casos" />
                                         <MenuBtn active={view==='register'} onClick={()=>{setEditing({isReferral:false}); setView('register');}} icon="plus-circle" label="Registro Directo" />
                                         <MenuBtn active={view==='reports'} onClick={()=>setView('reports')} icon="file-text" label="Reportes PDF" />
                                         <MenuBtn active={view==='config'} onClick={()=>setView('config')} icon="settings" label="Configuración" />
@@ -630,25 +930,27 @@
                     <main className="flex-1 overflow-y-auto relative">
                         <div className="md:hidden bg-indigo-900 text-white p-4 flex justify-between items-center sticky top-0 z-50"><span className="font-bold">Convivencia Pro</span><button onClick={()=>auth.signOut()}><Icon name="log-out"/></button></div>
                         <div className="p-4 md:p-10 max-w-7xl mx-auto">
-                            {isAdmin && view==='dashboard' && <Dashboard cases={data.cases} onEdit={c=>{setEditing(c); setView('register');}} onDelete={handleDelete} onPrint={(t,d,ty)=>generatePDF(t,d,ty,'',config.managerName)} />}
+                            {isAdmin && view==='dashboard' && <Dashboard cases={data.cases} config={config} />}
                             
+                            {isAdmin && view==='case_list' && <CaseListMaster cases={data.cases} onEdit={c=>{setEditing(c); setView('register');}} onDelete={handleDelete} onPrint={(t,d,ty)=>generatePDF(t,d,ty,'',config.managerName)} />}
+
                             {isAdmin && view==='inbox' && (
                                 <div className="fade-in">
                                     <h2 className="text-2xl font-bold text-slate-800 mb-6">Bandeja de Derivaciones</h2>
                                     <div className="grid gap-4">
                                         {data.referrals.length===0 && <div className="p-12 text-center border-2 border-dashed border-slate-300 rounded-2xl text-slate-400">No hay derivaciones pendientes de revisión.</div>}
                                         {data.referrals.map(r => (
-                                            <div key={r.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:border-indigo-400 transition-all group cursor-pointer" onClick={()=>{setEditing(r); setView('register');}}>
+                                            <div key={r.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:border-indigo-400 transition-all group">
                                                 <div className="flex justify-between items-start mb-3"><div className="flex items-center gap-3"><div className="w-2 h-12 bg-amber-500 rounded-full"></div><div><h3 className="font-bold text-lg text-slate-800">{r.studentName}</h3><p className="text-sm text-slate-500">{r.course} • Enviado por {r.senderName}</p></div></div><span className="badge badge-pending">Revisión Pendiente</span></div>
                                                 <div className="bg-slate-50 p-3 rounded-lg text-sm text-slate-600 mb-4 line-clamp-2">"{r.description}"</div>
-                                                <button className="text-indigo-600 font-bold text-sm hover:underline flex items-center gap-1">Gestionar Caso <Icon name="arrow-right" size={16}/></button>
+                                                <button onClick={()=>handleStartManagement(r)} className="text-indigo-600 font-bold text-sm hover:underline flex items-center gap-1"><Icon name="check-square" size={16}/> Aceptar y Gestionar</button>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             )}
 
-                            {(view==='register' || view==='referral') && <CaseForm config={config} initialData={editing} onSave={d=>handleSave({...d, status: d.status || (view==='referral'?'Pendiente':'Abierto')})} onCancel={()=>setView(isAdmin?'dashboard':'my_referrals')} isReferralView={view === 'referral'} userProfile={userProfile} />}
+                            {(view==='register' || view==='referral') && <CaseForm key={editing ? editing.id : 'new_case'} config={config} initialData={editing} onSave={d=>handleSave({...d, status: d.status || (view==='referral'?'Pendiente':'Abierto')})} onCancel={()=>setView(isAdmin?'dashboard':'my_referrals')} isReferralView={view === 'referral'} userProfile={userProfile} />}
 
                             {isAdmin && view==='reports' && (
                                 <div className="fade-in max-w-2xl mx-auto mt-10">
@@ -663,7 +965,6 @@
 
                             {!isAdmin && view==='my_referrals' && <MyReferralsList items={data.myReferrals || []} onOpen={setViewingRef} />}
                             
-                            {/* CORRECCIÓN: Uso limpio del componente Modal Detalle */}
                             {viewingRef && <ReferralDetailModal data={viewingRef} onClose={()=>setViewingRef(null)} />}
                         </div>
                     </main>
@@ -684,4 +985,3 @@
     </script>
 </body>
 </html>
-
